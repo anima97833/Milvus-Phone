@@ -114939,6 +114939,112 @@ ${commentsContext}
   );
 };
 
+const MANSION_GUEST_IDS = ["guest_default_1", "guest_default_2"];
+
+const sanitizeMansionActiveIds = (savedIds, chats) => {
+  if (!Array.isArray(savedIds)) return [];
+  const validChatIds = new Set(
+    (Array.isArray(chats) ? chats : [])
+      .filter(chat => chat && chat.id != null)
+      .map(chat => String(chat.id))
+  );
+  const seen = new Set();
+  return savedIds.filter(id => {
+    if (id == null) return false;
+    const idKey = String(id);
+    if (seen.has(idKey)) return false;
+    if (!MANSION_GUEST_IDS.includes(idKey) && !validChatIds.has(idKey)) return false;
+    seen.add(idKey);
+    return true;
+  }).slice(0, 5);
+};
+
+const resolveMansionActiveIds = (savedIds, chats) => {
+  const sanitized = sanitizeMansionActiveIds(savedIds, chats);
+  if (sanitized.length > 0) return sanitized;
+  const defaultIds = sanitizeMansionActiveIds(
+    (Array.isArray(chats) ? chats : []).map(chat => chat?.id),
+    chats
+  ).slice(0, 3);
+  return defaultIds.length > 0 ? defaultIds : [...MANSION_GUEST_IDS];
+};
+
+const resolveMansionCharacter = (charId, chats) => {
+  const idKey = String(charId);
+  const chat = (Array.isArray(chats) ? chats : []).find(
+    item => item && item.id != null && String(item.id) === idKey
+  );
+  if (chat) return chat;
+  if (!MANSION_GUEST_IDS.includes(idKey)) return null;
+  return {
+    id: charId,
+    name: idKey === "guest_default_1" ? "少侠喵" : "仙风喵",
+    personality: "温雅从容，清逸出尘",
+    desc: "心纸居侍奉名士"
+  };
+};
+
+const cleanupDeletedCharacterFromMansion = async (charId) => {
+  const idKey = String(charId);
+
+  try {
+    const savedIds = JSON.parse(localStorage.getItem("t8_mansion_active_ids") || "[]");
+    if (Array.isArray(savedIds)) {
+      const updatedIds = savedIds.filter(id => String(id) !== idKey);
+      if (updatedIds.length !== savedIds.length) {
+        localStorage.setItem("t8_mansion_active_ids", JSON.stringify(updatedIds));
+      }
+    }
+  } catch (error) {
+    console.warn("清理心纸居名士列表失败:", error);
+  }
+
+  try {
+    const localSprites = JSON.parse(localStorage.getItem("t8_mansion_custom_avatars") || "{}");
+    if (localSprites && typeof localSprites === "object" && !Array.isArray(localSprites)) {
+      const spriteKey = Object.keys(localSprites).find(key => String(key) === idKey);
+      if (spriteKey !== undefined) {
+        const updatedSprites = { ...localSprites };
+        delete updatedSprites[spriteKey];
+        localStorage.setItem("t8_mansion_custom_avatars", JSON.stringify(updatedSprites));
+      }
+    }
+  } catch (error) {
+    console.warn("清理心纸居本地立绘失败:", error);
+  }
+
+  try {
+    if (!window.openDB || !window.STORES) return;
+    const db = await window.openDB();
+    const tx = db.transaction(window.STORES.USER_SETTINGS, "readwrite");
+    const store = tx.objectStore(window.STORES.USER_SETTINGS);
+    await new Promise((resolve, reject) => {
+      const request = store.get("mansion_character_sprites");
+      request.onerror = () => reject(request.error || new Error("读取心纸居立绘失败"));
+      request.onsuccess = () => {
+        const record = request.result;
+        const sprites = record?.value;
+        if (!sprites || typeof sprites !== "object" || Array.isArray(sprites)) {
+          resolve();
+          return;
+        }
+        const spriteKey = Object.keys(sprites).find(key => String(key) === idKey);
+        if (spriteKey === undefined) {
+          resolve();
+          return;
+        }
+        const updatedSprites = { ...sprites };
+        delete updatedSprites[spriteKey];
+        const putRequest = store.put({ ...record, key: "mansion_character_sprites", value: updatedSprites });
+        putRequest.onerror = () => reject(putRequest.error || new Error("写入心纸居立绘失败"));
+        putRequest.onsuccess = () => resolve();
+      };
+    });
+  } catch (error) {
+    console.warn("清理心纸居 IndexedDB 立绘失败:", error);
+  }
+};
+
 // ==================== 心纸居（放置小人互动空间）主组件 · 2行x4列固定分页版 ====================
 const HeartPaperMansion = ({ onClose, chats = [] }) => {
   const { useState, useEffect, useRef } = React;
@@ -115223,7 +115329,7 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     }
   };
 
-  // 初始化
+  // 初始化一次性资源
   useEffect(() => {
     const timer = setTimeout(() => setAnimState('active'), 450);
 
@@ -115231,25 +115337,27 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     loadLettersFromIndexedDB();
     loadSpecialGiftsFromDB();
 
+    return () => clearTimeout(timer);
+  }, []);
+
+  // 角色列表变化时清理历史残留并回写
+  useEffect(() => {
+    let savedActiveIds = null;
     try {
-      const savedActiveIds = JSON.parse(localStorage.getItem("t8_mansion_active_ids") || "null");
-      if (Array.isArray(savedActiveIds) && savedActiveIds.length > 0) {
-        setActiveCharIds(savedActiveIds.slice(0, 5));
-        setSpecifiedCharId(savedActiveIds[0]);
-      } else if (chats && chats.length > 0) {
-        const defaultIds = chats.slice(0, Math.min(3, chats.length)).map(c => c.id);
-        setActiveCharIds(defaultIds);
-        setSpecifiedCharId(defaultIds[0]);
-        localStorage.setItem("t8_mansion_active_ids", JSON.stringify(defaultIds));
-      } else {
-        setActiveCharIds(["guest_default_1", "guest_default_2"]);
-        setSpecifiedCharId("guest_default_1");
-      }
+      savedActiveIds = JSON.parse(localStorage.getItem("t8_mansion_active_ids") || "null");
     } catch (e) {
       console.warn("加载心纸居名士列表失败:", e);
     }
-
-    return () => clearTimeout(timer);
+    const resolvedIds = resolveMansionActiveIds(savedActiveIds, chats);
+    setActiveCharIds(resolvedIds);
+    setSpecifiedCharId(currentId =>
+      resolvedIds.some(id => String(id) === String(currentId)) ? currentId : (resolvedIds[0] || '')
+    );
+    try {
+      localStorage.setItem("t8_mansion_active_ids", JSON.stringify(resolvedIds));
+    } catch (e) {
+      console.warn("保存心纸居名士列表失败:", e);
+    }
   }, [chats]);
 
   // 解析并缓存头像
@@ -115295,12 +115403,8 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
 
     const newCharacters = activeCharIds.map((charId, idx) => {
       const existing = currentMap.get(charId);
-      const chatData = (chats || []).find(c => c.id === charId) || {
-        id: charId,
-        name: charId === "guest_default_1" ? "少侠喵" : charId === "guest_default_2" ? "仙风喵" : `名士·${charId}`,
-        personality: "温雅从容，清逸出尘",
-        desc: "心纸居侍奉名士"
-      };
+      const chatData = resolveMansionCharacter(charId, chats);
+      if (!chatData) return null;
 
       const spritesList = customSpritesMap[charId] || [];
       const resolvedImg = resolvedAvatars[charId];
@@ -115334,7 +115438,7 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
         affection: chatData.affection || 88,
         pokes: 0
       };
-    });
+    }).filter(Boolean);
 
     setCharacters(newCharacters);
     if (!specifiedCharId && activeCharIds.length > 0) {
@@ -116365,12 +116469,10 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
   });
 
   const selectableWritingChars = activeCharIds.map(id => {
-    const fromChars = characters.find(c => c.id === id);
+    const fromChars = characters.find(c => String(c.id) === String(id));
     if (fromChars) return fromChars;
-    const fromChats = (chats || []).find(c => c.id === id);
-    if (fromChats) return fromChats;
-    return { id, name: `名士${id}` };
-  });
+    return resolveMansionCharacter(id, chats);
+  }).filter(Boolean);
 
   // ==================== 礼物分页计算：一页最多2行x4列=8个 ====================
   const GIFT_PAGE_SIZE = 8;
@@ -119215,6 +119317,7 @@ const T8Page = () => {
           console.error("\u4ECEIndexedDB\u5220\u9664\u89D2\u8272\u5931\u8D25:", error);
         }
       }
+      await cleanupDeletedCharacterFromMansion(id);
     }
   };
   const handleHide = async (id) => {
@@ -119234,6 +119337,7 @@ const T8Page = () => {
         console.error("\u4ECEIndexedDB\u5220\u9664\u89D2\u8272\u5931\u8D25:", error);
       }
     }
+    await cleanupDeletedCharacterFromMansion(id);
   };
   const handleUpdateChat = async (id, updates) => {
     setChats((prev) => {
