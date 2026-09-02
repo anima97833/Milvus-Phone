@@ -1109,6 +1109,7 @@
         flex-direction: column;
         align-items: center;
         overflow-y: auto;
+        scrollbar-gutter: stable;
         font-family:
           -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue",
           sans-serif;
@@ -1123,9 +1124,10 @@
         width: 100%;
         max-width: 450px;
         padding: 20px;
-        flex: 1;
+        flex: 0 0 auto;
         display: flex;
         flex-direction: column;
+        box-sizing: border-box;
       }
 
       
@@ -1133,8 +1135,9 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 20px;
+        margin-bottom: 16px;
         padding: 0 5px;
+        flex: 0 0 auto;
       }
 
       .calendar-title-group h1 {
@@ -1146,7 +1149,7 @@
       .calendar-title-group .year-select {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
+        gap: 6px;
         font-size: 1.6rem;
         font-weight: bold;
         color: #333;
@@ -1154,7 +1157,7 @@
         padding: 2px 10px;
         border-radius: 12px;
         background: rgba(0, 0, 0, 0.04);
-        transition: all 0.2s ease;
+        transition: background-color 0.2s ease;
         user-select: none;
       }
 
@@ -1162,10 +1165,36 @@
         background: rgba(0, 0, 0, 0.08);
       }
 
-      .calendar-title-group .year-select .year-caret {
-        font-size: 0.85rem;
-        color: #777;
+      .calendar-year-caret {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        font-size: 11px;
         line-height: 1;
+        color: #777;
+        transform: rotate(0deg);
+        transform-origin: center;
+        transition: transform 0.18s ease;
+        vertical-align: middle;
+        user-select: none;
+      }
+
+      .calendar-year-caret.expanded {
+        transform: rotate(90deg);
+      }
+
+      .calendar-selector-slot {
+        flex: 0 0 auto;
+      }
+
+      .calendar-selector-slot:empty {
+        margin: 0;
+      }
+
+      .calendar-selector-slot:not(:empty) {
+        margin-bottom: 18px;
       }
 
       .calendar-date-selector {
@@ -1173,9 +1202,20 @@
         border: 1px solid rgba(0, 0, 0, 0.06);
         border-radius: 16px;
         padding: 12px 14px 16px;
-        margin: 10px 0 16px 0;
+        margin: 0;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-        animation: fadeIn 0.25s ease;
+        animation: calendarSelectorIn 0.16s ease-out;
+      }
+
+      @keyframes calendarSelectorIn {
+        from {
+          opacity: 0;
+          transform: translateY(-4px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
 
       .calendar-selector-label {
@@ -1253,6 +1293,7 @@
         box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.05);
         padding: 20px;
         margin-bottom: 30px;
+        flex: 0 0 auto;
       }
 
       .calendar-week-header {
@@ -2146,6 +2187,7 @@
       
       .calendar-nav {
         height: 56px;
+        flex: 0 0 56px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -2156,6 +2198,7 @@
         top: 0;
         z-index: 10;
         width: 100%;
+        box-sizing: border-box;
       }
 
       .calendar-nav .back-btn {

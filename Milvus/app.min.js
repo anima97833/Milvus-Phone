@@ -3135,7 +3135,7 @@ const CalendarPage = () => {
     };
     saveTasks();
   }, [tasks]);
-  return /* @__PURE__ */ React.createElement("div", { className: "calendar-container" }, /* @__PURE__ */ React.createElement("header", { className: "calendar-header" }, /* @__PURE__ */ React.createElement("div", { className: "calendar-title-group" }, /* @__PURE__ */ React.createElement("h1", null, getMonthName(currentMonth), " ", /* @__PURE__ */ React.createElement("span", { className: `year-select ${showYearSelector || showMonthSelector ? "open" : ""}`, onClick: toggleYearSelector }, currentYear, /* @__PURE__ */ React.createElement("span", { className: "year-caret" }, showYearSelector || showMonthSelector ? " \u25B4" : " \u25BE"))), /* @__PURE__ */ React.createElement("div", { className: "calendar-lunar-year" }, "\u4E19\u5348\u5E74 (\u9A6C\u5E74) \u5929\u5E72\u5730\u652F\u7EAA\u5E74\u6CD5")), /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "calendar-container" }, /* @__PURE__ */ React.createElement("header", { className: "calendar-header" }, /* @__PURE__ */ React.createElement("div", { className: "calendar-title-group" }, /* @__PURE__ */ React.createElement("h1", null, getMonthName(currentMonth), " ", /* @__PURE__ */ React.createElement("span", { className: `year-select ${showYearSelector || showMonthSelector ? "open" : ""}`, onClick: toggleYearSelector }, currentYear, " ", /* @__PURE__ */ React.createElement("span", { className: `calendar-year-caret ${showYearSelector || showMonthSelector ? "expanded" : ""}` }, "\u25B6"))), /* @__PURE__ */ React.createElement("div", { className: "calendar-lunar-year" }, "\u4E19\u5348\u5E74 (\u9A6C\u5E74) \u5929\u5E72\u5730\u652F\u7EAA\u5E74\u6CD5")), /* @__PURE__ */ React.createElement(
     "div",
     {
       className: "calendar-avatar",
@@ -3148,9 +3148,12 @@ const CalendarPage = () => {
         fill: "#333"
       }
     ))
-  )), (showYearSelector || showMonthSelector) && /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement(
     "div",
-    { className: "calendar-date-selector" },
+    { className: "calendar-selector-slot" },
+    (showYearSelector || showMonthSelector) && /* @__PURE__ */ React.createElement(
+      "div",
+      { className: "calendar-date-selector" },
     showYearSelector && /* @__PURE__ */ React.createElement(
       React.Fragment,
       null,
@@ -3189,7 +3192,7 @@ const CalendarPage = () => {
         ))
       )
     )
-  ), /* @__PURE__ */ React.createElement("section", { className: "calendar-card" }, /* @__PURE__ */ React.createElement("div", { className: "calendar-week-header" }, /* @__PURE__ */ React.createElement("div", null, "\u65E5"), /* @__PURE__ */ React.createElement("div", null, "\u6708"), /* @__PURE__ */ React.createElement("div", null, "\u706B"), /* @__PURE__ */ React.createElement("div", null, "\u6C34"), /* @__PURE__ */ React.createElement("div", null, "\u6728"), /* @__PURE__ */ React.createElement("div", null, "\u91D1"), /* @__PURE__ */ React.createElement("div", null, "\u571F")), /* @__PURE__ */ React.createElement("div", { className: "calendar-days-grid" }, generateCalendarGrid()), /* @__PURE__ */ React.createElement("div", { className: "calendar-hint-text" }, "\u6709\u5FD7\u8005\uFF0C\u4E8B\u7ADE\u6210")), showColorPicker && /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement("section", { className: "calendar-card" }, /* @__PURE__ */ React.createElement("div", { className: "calendar-week-header" }, /* @__PURE__ */ React.createElement("div", null, "\u65E5"), /* @__PURE__ */ React.createElement("div", null, "\u6708"), /* @__PURE__ */ React.createElement("div", null, "\u706B"), /* @__PURE__ */ React.createElement("div", null, "\u6C34"), /* @__PURE__ */ React.createElement("div", null, "\u6728"), /* @__PURE__ */ React.createElement("div", null, "\u91D1"), /* @__PURE__ */ React.createElement("div", null, "\u571F")), /* @__PURE__ */ React.createElement("div", { className: "calendar-days-grid" }, generateCalendarGrid()), /* @__PURE__ */ React.createElement("div", { className: "calendar-hint-text" }, "\u6709\u5FD7\u8005\uFF0C\u4E8B\u7ADE\u6210")), showColorPicker && /* @__PURE__ */ React.createElement(
     "div",
     {
       className: "calendar-modal-overlay",
