@@ -1144,16 +1144,89 @@
       }
 
       .calendar-title-group .year-select {
-        font-size: 1.8rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 1.6rem;
         font-weight: bold;
         color: #333;
         cursor: pointer;
+        padding: 2px 10px;
+        border-radius: 12px;
+        background: rgba(0, 0, 0, 0.04);
+        transition: all 0.2s ease;
+        user-select: none;
       }
 
-      .calendar-title-group .year-select::after {
-        content: " ▼";
-        font-size: 0.8rem;
-        vertical-align: middle;
+      .calendar-title-group .year-select:hover {
+        background: rgba(0, 0, 0, 0.08);
+      }
+
+      .calendar-title-group .year-select .year-caret {
+        font-size: 0.85rem;
+        color: #777;
+        line-height: 1;
+      }
+
+      .calendar-date-selector {
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 16px;
+        padding: 12px 14px 16px;
+        margin: 10px 0 16px 0;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+        animation: fadeIn 0.25s ease;
+      }
+
+      .calendar-selector-label {
+        font-size: 0.75rem;
+        color: #8c917b;
+        font-weight: 600;
+        margin-bottom: 10px;
+        letter-spacing: 0.5px;
+      }
+
+      .calendar-year-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+      }
+
+      .calendar-month-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+      }
+
+      .calendar-year-chip,
+      .calendar-month-chip {
+        background: #fdfcf8;
+        border: 1px solid #e2ded5;
+        border-radius: 10px;
+        padding: 8px 4px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #5a5f4d;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        outline: none;
+      }
+
+      .calendar-year-chip:hover,
+      .calendar-month-chip:hover {
+        background: #f3efe6;
+        border-color: #d1cbbe;
+      }
+
+      .calendar-year-chip.active,
+      .calendar-month-chip.active {
+        background: #d6724b;
+        border-color: #d6724b;
+        color: #ffffff;
+        box-shadow: 0 2px 6px rgba(214, 114, 75, 0.35);
       }
 
       .calendar-lunar-year {
@@ -1291,7 +1364,10 @@
         background: white;
         border-radius: 18px;
         padding: 18px;
-        margin-bottom: 20px;
+        margin: 0;
+        width: 100%;
+        flex: 0 0 100%;
+        box-sizing: border-box;
         border: 0.5px solid #eee;
         box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.05);
         display: flex;

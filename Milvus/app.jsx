@@ -2744,6 +2744,7 @@ const CalendarPage = () => {
   }, [dayColors]);
   const handleTabClick = (tab) => {
     setActiveTab(tab);
+    setSwipeOffset({});
   };
   const openNewTaskModal = (day, category = "\u8FDB\u884C\u4E4B\u4E8B") => {
     const newId = Date.now();
@@ -3016,15 +3017,22 @@ const CalendarPage = () => {
     setCurrentYear(year);
     setShowYearSelector(false);
     setShowMonthSelector(true);
+    setSwipeOffset({});
   };
   const handleMonthSelect = (month) => {
     setSelectedMonth(month);
     setCurrentMonth(month);
     setShowMonthSelector(false);
+    setSwipeOffset({});
   };
   const toggleYearSelector = () => {
-    setShowYearSelector(!showYearSelector);
-    setShowMonthSelector(false);
+    if (showYearSelector || showMonthSelector) {
+      setShowYearSelector(false);
+      setShowMonthSelector(false);
+    } else {
+      setShowYearSelector(true);
+      setShowMonthSelector(false);
+    }
   };
   const getMonthName = (month) => {
     const monthNames = [
@@ -3085,7 +3093,7 @@ const CalendarPage = () => {
       const isCurrentDay = isToday && today.getDate() === day;
       const dayColorData = dayColors[day.toString()];
       const shouldShowColor = !selectedCharacter || dayColorData?.characterId === selectedCharacter.id;
-      const backgroundColor = shouldShowColor && dayColorData ? dayColorData.color : "transparent";
+      const backgroundColor = shouldShowColor && dayColorData ? dayColorData.color : undefined;
       grid.push(
         /* @__PURE__ */ React.createElement(
           "div",
@@ -3093,7 +3101,7 @@ const CalendarPage = () => {
             key: `day-${day}`,
             className: `calendar-day ${isCurrentDay ? "circle-today" : ""}`,
             onClick: () => handleDayClick(day.toString()),
-            style: { backgroundColor }
+            style: backgroundColor ? { backgroundColor } : undefined
           },
           day
         )
@@ -3127,7 +3135,7 @@ const CalendarPage = () => {
     };
     saveTasks();
   }, [tasks]);
-  return /* @__PURE__ */ React.createElement("div", { className: "calendar-container" }, /* @__PURE__ */ React.createElement("header", { className: "calendar-header" }, /* @__PURE__ */ React.createElement("div", { className: "calendar-title-group" }, /* @__PURE__ */ React.createElement("h1", null, getMonthName(currentMonth), " ", /* @__PURE__ */ React.createElement("span", { className: "year-select", onClick: toggleYearSelector }, currentYear, " \u25BC")), /* @__PURE__ */ React.createElement("div", { className: "calendar-lunar-year" }, "\u4E19\u5348\u5E74 (\u9A6C\u5E74) \u5929\u5E72\u5730\u652F\u7EAA\u5E74\u6CD5")), /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "calendar-container" }, /* @__PURE__ */ React.createElement("header", { className: "calendar-header" }, /* @__PURE__ */ React.createElement("div", { className: "calendar-title-group" }, /* @__PURE__ */ React.createElement("h1", null, getMonthName(currentMonth), " ", /* @__PURE__ */ React.createElement("span", { className: `year-select ${showYearSelector || showMonthSelector ? "open" : ""}`, onClick: toggleYearSelector }, currentYear, /* @__PURE__ */ React.createElement("span", { className: "year-caret" }, showYearSelector || showMonthSelector ? " \u25B4" : " \u25BE"))), /* @__PURE__ */ React.createElement("div", { className: "calendar-lunar-year" }, "\u4E19\u5348\u5E74 (\u9A6C\u5E74) \u5929\u5E72\u5730\u652F\u7EAA\u5E74\u6CD5")), /* @__PURE__ */ React.createElement(
     "div",
     {
       className: "calendar-avatar",
@@ -3140,47 +3148,48 @@ const CalendarPage = () => {
         fill: "#333"
       }
     ))
-  )), showYearSelector && /* @__PURE__ */ React.createElement("div", { className: "calendar-color-picker" }, /* @__PURE__ */ React.createElement("div", { className: "calendar-color-picker-header" }, /* @__PURE__ */ React.createElement("h3", null, "\u9009\u62E9\u5E74\u4EFD"), /* @__PURE__ */ React.createElement("button", { onClick: () => setShowYearSelector(false) }, "\u5173\u95ED")), /* @__PURE__ */ React.createElement(
+  )), (showYearSelector || showMonthSelector) && /* @__PURE__ */ React.createElement(
     "div",
-    {
-      className: "calendar-color-options",
-      style: { gridTemplateColumns: "repeat(5, 1fr)" }
-    },
-    generateYearList().map((year) => /* @__PURE__ */ React.createElement(
-      "div",
-      {
-        key: year,
-        className: "calendar-color-option",
-        onClick: () => handleYearSelect(year),
-        style: {
-          backgroundColor: year === currentYear ? "#b4c7e7" : "transparent",
-          color: year === currentYear ? "white" : "#333",
-          border: year === currentYear ? "none" : "2px solid #ccc"
-        }
-      },
-      /* @__PURE__ */ React.createElement("span", null, year)
-    ))
-  )), showMonthSelector && /* @__PURE__ */ React.createElement("div", { className: "calendar-color-picker" }, /* @__PURE__ */ React.createElement("div", { className: "calendar-color-picker-header" }, /* @__PURE__ */ React.createElement("h3", null, "\u9009\u62E9\u6708\u4EFD"), /* @__PURE__ */ React.createElement("button", { onClick: () => setShowMonthSelector(false) }, "\u5173\u95ED")), /* @__PURE__ */ React.createElement(
-    "div",
-    {
-      className: "calendar-color-options",
-      style: { gridTemplateColumns: "repeat(4, 1fr)" }
-    },
-    generateMonthList().map((month) => /* @__PURE__ */ React.createElement(
-      "div",
-      {
-        key: month,
-        className: "calendar-color-option",
-        onClick: () => handleMonthSelect(month),
-        style: {
-          backgroundColor: month === currentMonth ? "#e8c3a2" : "transparent",
-          color: month === currentMonth ? "white" : "#333",
-          border: month === currentMonth ? "none" : "2px solid #ccc"
-        }
-      },
-      /* @__PURE__ */ React.createElement("span", null, getMonthName(month))
-    ))
-  )), /* @__PURE__ */ React.createElement("section", { className: "calendar-card" }, /* @__PURE__ */ React.createElement("div", { className: "calendar-week-header" }, /* @__PURE__ */ React.createElement("div", null, "\u65E5"), /* @__PURE__ */ React.createElement("div", null, "\u6708"), /* @__PURE__ */ React.createElement("div", null, "\u706B"), /* @__PURE__ */ React.createElement("div", null, "\u6C34"), /* @__PURE__ */ React.createElement("div", null, "\u6728"), /* @__PURE__ */ React.createElement("div", null, "\u91D1"), /* @__PURE__ */ React.createElement("div", null, "\u571F")), /* @__PURE__ */ React.createElement("div", { className: "calendar-days-grid" }, generateCalendarGrid()), /* @__PURE__ */ React.createElement("div", { className: "calendar-hint-text" }, "\u6709\u5FD7\u8005\uFF0C\u6210\u6210\u6210")), showColorPicker && /* @__PURE__ */ React.createElement(
+    { className: "calendar-date-selector" },
+    showYearSelector && /* @__PURE__ */ React.createElement(
+      React.Fragment,
+      null,
+      /* @__PURE__ */ React.createElement("div", { className: "calendar-selector-label" }, "\u9009\u62E9\u5E74\u4EFD \xB7 \u516C\u5143\u7EAA\u5E74"),
+      /* @__PURE__ */ React.createElement(
+        "div",
+        { className: "calendar-year-grid" },
+        generateYearList().map((year) => /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            key: year,
+            type: "button",
+            className: `calendar-year-chip ${year === currentYear ? "active" : ""}`,
+            onClick: () => handleYearSelect(year)
+          },
+          year
+        ))
+      )
+    ),
+    showMonthSelector && /* @__PURE__ */ React.createElement(
+      React.Fragment,
+      null,
+      /* @__PURE__ */ React.createElement("div", { className: "calendar-selector-label" }, `${selectedYear} \xB7 \u9009\u62E9\u6708\u4EFD`),
+      /* @__PURE__ */ React.createElement(
+        "div",
+        { className: "calendar-month-grid" },
+        generateMonthList().map((month) => /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            key: month,
+            type: "button",
+            className: `calendar-month-chip ${month === currentMonth ? "active" : ""}`,
+            onClick: () => handleMonthSelect(month)
+          },
+          getMonthName(month)
+        ))
+      )
+    )
+  ), /* @__PURE__ */ React.createElement("section", { className: "calendar-card" }, /* @__PURE__ */ React.createElement("div", { className: "calendar-week-header" }, /* @__PURE__ */ React.createElement("div", null, "\u65E5"), /* @__PURE__ */ React.createElement("div", null, "\u6708"), /* @__PURE__ */ React.createElement("div", null, "\u706B"), /* @__PURE__ */ React.createElement("div", null, "\u6C34"), /* @__PURE__ */ React.createElement("div", null, "\u6728"), /* @__PURE__ */ React.createElement("div", null, "\u91D1"), /* @__PURE__ */ React.createElement("div", null, "\u571F")), /* @__PURE__ */ React.createElement("div", { className: "calendar-days-grid" }, generateCalendarGrid()), /* @__PURE__ */ React.createElement("div", { className: "calendar-hint-text" }, "\u6709\u5FD7\u8005\uFF0C\u4E8B\u7ADE\u6210")), showColorPicker && /* @__PURE__ */ React.createElement(
     "div",
     {
       className: "calendar-modal-overlay",
