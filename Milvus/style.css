@@ -1109,6 +1109,7 @@
         flex-direction: column;
         align-items: center;
         overflow-y: auto;
+        scrollbar-gutter: stable;
         font-family:
           -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue",
           sans-serif;
@@ -1123,9 +1124,10 @@
         width: 100%;
         max-width: 450px;
         padding: 20px;
-        flex: 1;
+        flex: 0 0 auto;
         display: flex;
         flex-direction: column;
+        box-sizing: border-box;
       }
 
       
@@ -1133,8 +1135,9 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 20px;
+        margin-bottom: 16px;
         padding: 0 5px;
+        flex: 0 0 auto;
       }
 
       .calendar-title-group h1 {
@@ -1144,16 +1147,126 @@
       }
 
       .calendar-title-group .year-select {
-        font-size: 1.8rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 1.6rem;
         font-weight: bold;
         color: #333;
         cursor: pointer;
+        padding: 2px 10px;
+        border-radius: 12px;
+        background: rgba(0, 0, 0, 0.04);
+        transition: background-color 0.2s ease;
+        user-select: none;
       }
 
-      .calendar-title-group .year-select::after {
-        content: " ▼";
-        font-size: 0.8rem;
+      .calendar-title-group .year-select:hover {
+        background: rgba(0, 0, 0, 0.08);
+      }
+
+      .calendar-year-caret {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        font-size: 11px;
+        line-height: 1;
+        color: #777;
+        transform: rotate(0deg);
+        transform-origin: center;
+        transition: transform 0.18s ease;
         vertical-align: middle;
+        user-select: none;
+      }
+
+      .calendar-year-caret.expanded {
+        transform: rotate(90deg);
+      }
+
+      .calendar-selector-slot {
+        flex: 0 0 auto;
+      }
+
+      .calendar-selector-slot:empty {
+        margin: 0;
+      }
+
+      .calendar-selector-slot:not(:empty) {
+        margin-bottom: 18px;
+      }
+
+      .calendar-date-selector {
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 16px;
+        padding: 12px 14px 16px;
+        margin: 0;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+        animation: calendarSelectorIn 0.16s ease-out;
+      }
+
+      @keyframes calendarSelectorIn {
+        from {
+          opacity: 0;
+          transform: translateY(-4px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .calendar-selector-label {
+        font-size: 0.75rem;
+        color: #8c917b;
+        font-weight: 600;
+        margin-bottom: 10px;
+        letter-spacing: 0.5px;
+      }
+
+      .calendar-year-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+      }
+
+      .calendar-month-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+      }
+
+      .calendar-year-chip,
+      .calendar-month-chip {
+        background: #fdfcf8;
+        border: 1px solid #e2ded5;
+        border-radius: 10px;
+        padding: 8px 4px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #5a5f4d;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        outline: none;
+      }
+
+      .calendar-year-chip:hover,
+      .calendar-month-chip:hover {
+        background: #f3efe6;
+        border-color: #d1cbbe;
+      }
+
+      .calendar-year-chip.active,
+      .calendar-month-chip.active {
+        background: #d6724b;
+        border-color: #d6724b;
+        color: #ffffff;
+        box-shadow: 0 2px 6px rgba(214, 114, 75, 0.35);
       }
 
       .calendar-lunar-year {
@@ -1180,6 +1293,7 @@
         box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.05);
         padding: 20px;
         margin-bottom: 30px;
+        flex: 0 0 auto;
       }
 
       .calendar-week-header {
@@ -1291,7 +1405,10 @@
         background: white;
         border-radius: 18px;
         padding: 18px;
-        margin-bottom: 20px;
+        margin: 0;
+        width: 100%;
+        flex: 0 0 100%;
+        box-sizing: border-box;
         border: 0.5px solid #eee;
         box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.05);
         display: flex;
@@ -2070,6 +2187,7 @@
       
       .calendar-nav {
         height: 56px;
+        flex: 0 0 56px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -2080,6 +2198,7 @@
         top: 0;
         z-index: 10;
         width: 100%;
+        box-sizing: border-box;
       }
 
       .calendar-nav .back-btn {
