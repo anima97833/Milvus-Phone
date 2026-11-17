@@ -540,6 +540,77 @@
         animation: fadeIn 0.3s ease;
       }
 
+      /* ===== 桌面图标 & Dock 自由拖拽交互样式 ===== */
+      .icon-item {
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1), opacity 0.18s ease;
+      }
+
+      .icon-item.is-drag-armed {
+        transform: scale(1.08);
+        filter: drop-shadow(0 6px 14px rgba(109, 115, 91, 0.35));
+      }
+
+      .icon-item.is-drag-source {
+        opacity: 0.25;
+        transform: scale(0.9);
+      }
+
+      .icon-item.is-drop-target .icon-box {
+        outline: 2px dashed var(--olive-crisp, #6d735b);
+        outline-offset: 3px;
+        transform: scale(1.08);
+        transition: transform 0.15s ease;
+      }
+
+      .dock-bar-container {
+        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+      }
+
+      .dock-bar-container.is-dock-drop-active {
+        border-color: rgba(109, 115, 91, 0.65) !important;
+        box-shadow: 0 6px 24px rgba(109, 115, 91, 0.22) !important;
+        transform: scale(1.02);
+      }
+
+      .floating-drag-ghost {
+        position: fixed;
+        z-index: 999999;
+        pointer-events: none;
+        transform: translate(-50%, -55%) scale(1.12);
+        filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.24));
+      }
+
+      .edge-flip-indicator {
+        position: absolute;
+        top: 64px;
+        bottom: 90px;
+        width: 26px;
+        pointer-events: none;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--olive-crisp, #6d735b);
+        font-size: 16px;
+        font-weight: bold;
+        animation: fadeIn 0.18s ease;
+      }
+
+      .edge-flip-indicator.left {
+        left: 0;
+        background: linear-gradient(90deg, rgba(109, 115, 91, 0.22), transparent);
+        border-radius: 0 16px 16px 0;
+      }
+
+      .edge-flip-indicator.right {
+        right: 0;
+        background: linear-gradient(270deg, rgba(109, 115, 91, 0.22), transparent);
+        border-radius: 16px 0 0 16px;
+      }
+
       
       .settings-overlay {
         position: absolute;
@@ -1940,6 +2011,11 @@
         border-radius: 18px;
         display: flex;
         align-items: stretch;
+      }
+
+      .calendar-task-wrapper .calendar-task-card {
+        margin-bottom: 0;
+        box-sizing: border-box;
       }
 
       
