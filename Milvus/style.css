@@ -3419,11 +3419,10 @@
 
       
       .forum-overlay .forum-navbar {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        height: 70px;
+        position: relative;
+        flex-shrink: 0;
+        width: 100%;
+        height: 64px;
         background: rgba(255, 255, 255, 0.95);
         backdrop-filter: blur(10px);
         border-top-left-radius: 24px;
@@ -3432,7 +3431,7 @@
         justify-content: space-around;
         align-items: center;
         box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.03);
-        padding-bottom: 10px;
+        padding-bottom: env(safe-area-inset-bottom, 6px);
         z-index: 100;
       }
 
