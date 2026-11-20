@@ -2759,6 +2759,31 @@ async function importAllDatabaseData(backupPayload, mode = "overwrite") {
     // 2. 还原 IndexedDB
     if (hasIndexedDB) {
       const db = await openDB();
+      if (mode === "overwrite") {
+        // 先清空当前数据库内所有已存在的 store，避免新备份未包含的旧 store（如 userSettings 里的旧密探立绘）残留
+        const allStoreNames = Array.from(db.objectStoreNames || []);
+        for (const existingStore of allStoreNames) {
+          await new Promise((resolve) => {
+            let done = false;
+            const finishClear = () => {
+              if (!done) {
+                done = true;
+                resolve();
+              }
+            };
+            try {
+              const clearTx = db.transaction(existingStore, "readwrite");
+              clearTx.objectStore(existingStore).clear();
+              clearTx.oncomplete = finishClear;
+              clearTx.onerror = finishClear;
+              clearTx.onabort = finishClear;
+            } catch (e) {
+              finishClear();
+            }
+            setTimeout(finishClear, 3000);
+          });
+        }
+      }
       const storeEntries = Object.entries(backupPayload.indexedDB);
 
       for (const [storeName, records] of storeEntries) {
