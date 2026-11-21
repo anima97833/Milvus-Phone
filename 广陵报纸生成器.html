@@ -1,0 +1,1508 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>广陵报纸生成器</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@200;400;600;700;900&family=ZCOOL+XiaoWei&family=Liu+Jian+Mao+Cao&display=swap"
+    rel="stylesheet" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #1a1a1a;
+      font-family: "Noto Serif SC", "SimSun", "STSong", "Songti SC", serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 10px 10px 40px;
+    }
+
+    .toolbar {
+      width: 100%;
+      max-width: 920px;
+      background: #2c2c2c;
+      border-radius: 12px;
+      padding: 16px 24px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: #fff;
+    }
+
+    .toolbar h1 {
+      font-size: 18px;
+      font-family: "Ma Shan Zheng", cursive;
+      letter-spacing: 2px;
+      color: #e8c47a;
+    }
+
+    .toolbar-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .toolbar button {
+      padding: 8px 18px;
+      border: 1px solid #555;
+      background: #3a3a3a;
+      color: #ddd;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .toolbar button:hover {
+      background: #c0392b;
+      border-color: #c0392b;
+      color: #fff;
+    }
+
+    .toolbar-tip {
+      font-size: 12px;
+      color: #999;
+      width: 100%;
+      text-align: center;
+      margin-top: 4px;
+    }
+
+    @media print {
+      .toolbar {
+        display: none !important;
+      }
+
+      body {
+        background: #fff;
+        padding: 0;
+      }
+
+      .newspaper-wrapper {
+        box-shadow: none !important;
+      }
+    }
+
+    .newspaper-wrapper {
+      position: relative;
+      width: 900px;
+      max-width: 100%;
+    }
+
+    .newspaper {
+      position: relative;
+      width: 900px;
+      min-height: 1260px;
+      padding: 18px 22px 22px;
+      background-color: #e5d8c0;
+      background-image:
+        radial-gradient(ellipse at 10% 10%,
+          rgba(160, 140, 100, 0.25) 0%,
+          transparent 50%),
+        radial-gradient(ellipse at 90% 90%,
+          rgba(140, 120, 85, 0.3) 0%,
+          transparent 50%),
+        radial-gradient(ellipse at 50% 50%,
+          rgba(200, 185, 155, 0.15) 0%,
+          transparent 70%),
+        radial-gradient(ellipse at 80% 20%,
+          rgba(170, 150, 110, 0.2) 0%,
+          transparent 40%),
+        radial-gradient(ellipse at 20% 80%,
+          rgba(180, 155, 110, 0.2) 0%,
+          transparent 40%);
+      box-shadow:
+        inset 0 0 100px rgba(100, 80, 50, 0.35),
+        0 4px 30px rgba(0, 0, 0, 0.5);
+      color: #2c1810;
+      overflow: hidden;
+    }
+
+    .newspaper::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(to right,
+          rgba(100, 80, 50, 0.35) 0%,
+          transparent 2.5%,
+          transparent 97.5%,
+          rgba(100, 80, 50, 0.35) 100%),
+        linear-gradient(to bottom,
+          rgba(100, 80, 50, 0.25) 0%,
+          transparent 2%,
+          transparent 98%,
+          rgba(100, 80, 50, 0.3) 100%);
+      pointer-events: none;
+      z-index: 50;
+    }
+
+    .newspaper::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 51;
+      opacity: 0.5;
+    }
+
+    /* Red top banner */
+    .red-banner {
+      height: 4px;
+      background: linear-gradient(90deg, #8b1a1a, #c0392b, #8b1a1a);
+      margin-bottom: 8px;
+      border-radius: 1px;
+      position: relative;
+      z-index: 2;
+    }
+
+    /* Header area */
+    .header {
+      display: flex;
+      align-items: flex-start;
+      position: relative;
+      z-index: 5;
+      margin-bottom: 2px;
+      border-bottom: 2px solid #2c1810;
+      padding-bottom: 8px;
+    }
+
+    .header-left {
+      flex: 1;
+    }
+
+    .header-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+
+    /* Title block */
+    .title-block {
+      display: flex;
+      align-items: center;
+      position: relative;
+      padding: 10px 20px;
+      background-color: #8b1a1a;
+      border-radius: 4px;
+    }
+
+    .title-chars {
+      display: flex;
+      direction: rtl;
+      align-items: flex-end;
+      gap: 0;
+      position: relative;
+    }
+
+    .title-char {
+      font-family: "Ma Shan Zheng", "Liu Jian Mao Cao", cursive;
+      color: #000;
+      line-height: 1;
+      text-shadow: 2px 2px 0 rgba(255, 255, 255, 0.2);
+    }
+
+    .title-char.c1 {
+      font-size: 100px;
+      margin-right: -5px;
+    }
+
+    /* 广 */
+    .title-char.c2 {
+      font-size: 100px;
+      margin-right: -5px;
+    }
+
+    /* 陵 */
+    .title-char.c3 {
+      font-size: 100px;
+      margin-right: -5px;
+    }
+
+    /* 爆 */
+    .title-char.c4 {
+      font-size: 100px;
+      margin-right: -5px;
+    }
+
+    /* 报 */
+    .title-vertical-line {
+      width: 1px;
+      background-color: #2c1810;
+      margin-right: 100px;
+      margin-left: 10px;
+      height: 160px;
+    }
+
+    .subtitle-line {
+      font-size: 16px;
+      letter-spacing: 8px;
+      margin-top: 2px;
+      text-align: right;
+      padding-right: 20px;
+      font-family: "ZCOOL XiaoWei", "Noto Serif SC", serif;
+    }
+
+    .date-line {
+      font-size: 11px;
+      letter-spacing: 3px;
+      margin-top: 2px;
+      text-align: right;
+      padding-right: 20px;
+      color: #555;
+    }
+
+    /* Hashtag bar below header */
+    .hashtag-bar {
+      display: flex;
+      gap: 10px;
+      font-size: 10.5px;
+      padding: 6px 0 6px 75px;
+      border-bottom: 1.5px solid #2c1810;
+      flex-wrap: wrap;
+      position: relative;
+      z-index: 5;
+      color: #444;
+      margin-bottom: 0;
+    }
+
+    .hashtag-bar span {
+      white-space: nowrap;
+    }
+
+    .hashtag-bar span::before {
+      content: "#";
+      color: #8b1a1a;
+      font-weight: bold;
+      margin-right: 1px;
+    }
+
+    /* Main layout */
+    .main-layout {
+      display: flex;
+      position: relative;
+      z-index: 5;
+      border-bottom: 1.5px solid #2c1810;
+    }
+
+    /* Left sidebar */
+    .sidebar {
+      width: 68px;
+      border-right: 1.5px solid #2c1810;
+      padding: 8px 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .sidebar-title {
+      writing-mode: vertical-rl;
+      font-size: 28px;
+      font-family: "Ma Shan Zheng", cursive;
+      letter-spacing: 8px;
+      color: #1a0f0a;
+      margin-bottom: 12px;
+      font-weight: 700;
+    }
+
+    .sidebar-topics {
+      writing-mode: vertical-rl;
+      font-size: 10px;
+      line-height: 1.8;
+      color: #444;
+      display: flex;
+      flex-direction: row-reverse;
+      gap: 3px;
+    }
+
+    .sidebar-topics .topic {
+      display: flex;
+      align-items: flex-start;
+    }
+
+    .sidebar-topics .topic::before {
+      content: "#";
+      color: #8b1a1a;
+      font-weight: bold;
+    }
+
+    /* Content area */
+    .content-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top content row */
+    .content-top {
+      display: flex;
+      flex: 1;
+      min-height: 540px;
+    }
+
+    /* Left article columns (long story) */
+    .left-articles {
+      width: 240px;
+      display: flex;
+      flex-shrink: 0;
+    }
+
+    .story-col {
+      writing-mode: vertical-rl;
+      font-size: 12px;
+      line-height: 1.95;
+      padding: 8px 5px 4px;
+      text-align: justify;
+      color: #2c1810;
+      flex: 1;
+      border-right: 1px solid #2c1810;
+      border-bottom: 1px solid #2c1810;
+      max-height: 550px;
+    }
+
+    .story-col p {
+      text-indent: 0;
+      margin: 0;
+    }
+
+    /* Center area */
+    .center-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      margin-left: 10px;
+      min-width: 0;
+    }
+
+    /* Big headline */
+    .big-headline {
+      padding: 10px 8px 14px;
+      text-align: center;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      border-bottom: 1px solid #2c1810;
+    }
+
+    .big-headline .headline-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .big-headline .bao {
+      font-family: "Ma Shan Zheng", cursive;
+      font-size: 56px;
+      color: #8b1a1a;
+      display: inline-block;
+      border: 3px solid #8b1a1a;
+      border-radius: 6px;
+      padding: 0 6px;
+      line-height: 1.15;
+      transform: rotate(-8deg);
+      margin-bottom: 8px;
+      background: rgba(139, 26, 26, 0.06);
+    }
+
+    .big-headline .headline-cols {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    .big-headline .main-title {
+      font-family: "Ma Shan Zheng", cursive;
+      font-size: 38px;
+      color: #1a0f0a;
+      writing-mode: vertical-rl;
+      line-height: 1.3;
+      letter-spacing: 3px;
+      text-align: center;
+    }
+
+    .big-headline .sub-title {
+      font-family: "Ma Shan Zheng", cursive;
+      font-size: 34px;
+      color: #1a0f0a;
+      writing-mode: vertical-rl;
+      line-height: 1.3;
+      letter-spacing: 2px;
+    }
+
+    .fun-line-box {
+      padding: 8px 6px;
+      text-align: center;
+      border-bottom: 1px dashed rgba(44, 24, 16, 0.45);
+    }
+
+    .fun-line {
+      font-family: "Ma Shan Zheng", cursive;
+      font-size: 20px;
+      color: #2c1810;
+      letter-spacing: 1px;
+      padding: 4px 12px;
+      background: rgba(232, 196, 122, 0.22);
+      border-radius: 4px;
+      display: inline-block;
+      max-width: 100%;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+
+    .fluffy-section {
+      flex: 1;
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      gap: 6px;
+      padding: 10px 6px 6px;
+      min-height: 220px;
+      overflow: hidden;
+    }
+
+    .fluffy-content {
+      writing-mode: vertical-rl;
+      font-size: 11.5px;
+      line-height: 1.85;
+      padding: 4px 4px;
+      text-align: justify;
+      color: #2c1810;
+      flex: 1;
+      max-height: 360px;
+      overflow: hidden;
+    }
+
+    .fluffy-title {
+      writing-mode: vertical-rl;
+      font-size: 24px;
+      font-family: "Ma Shan Zheng", cursive;
+      color: #1a0f0a;
+      line-height: 1.15;
+      letter-spacing: 2px;
+      padding: 2px 4px;
+      flex-shrink: 0;
+      border-left: 1px solid rgba(44, 24, 16, 0.35);
+    }
+
+    /* Illustrations area */
+    .illustrations {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      padding: 8px;
+      flex-wrap: wrap;
+    }
+
+    .bunny {
+      width: 50px;
+      height: 50px;
+      opacity: 0.7;
+    }
+
+    /* Right area */
+    .right-area {
+      width: 400px;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    /* Right top article */
+    .right-top-article {
+      border-bottom: 1px solid #999;
+      padding: 8px;
+      flex: 1;
+      display: flex;
+      position: relative;
+    }
+
+    .article-headline-vertical {
+      writing-mode: vertical-rl;
+      font-size: 18px;
+      font-family: "Ma Shan Zheng", cursive;
+      color: #1a0f0a;
+      line-height: 1.2;
+      letter-spacing: 3px;
+      padding: 0 4px;
+      flex-shrink: 0;
+    }
+
+    .article-headline-vertical.red {
+      color: #8b1a1a;
+    }
+
+    .article-body-vertical {
+      font-size: 12px;
+      line-height: 1.9;
+      padding: 4px 4px;
+      color: #333;
+      flex: 1;
+      text-align: justify;
+      overflow: hidden;
+      max-height: 400px;
+      max-width: 700px;
+      border-left: 1px solid #2c1810;
+    }
+
+    /* Rules container */
+    .rules-container {
+      width: 80%;
+      flex: 1;
+      max-width: 300px;
+      align-self: flex-start;
+      margin-left: 50px;
+      border-left: 1px solid #2c1810;
+    }
+
+    /* Rules section */
+    .rules-section {
+      padding: 8px;
+      flex: 1;
+    }
+
+    .rules-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    .rules-body {
+      font-size: 11.5px;
+      line-height: 1.9;
+      color: #333;
+      text-align: justify;
+    }
+
+    .rules-body .chapter {
+      font-weight: 700;
+      color: #8b1a1a;
+      margin: 4px 0 2px;
+      font-size: 12.5px;
+    }
+
+    .rules-body .chapter em {
+      font-style: normal;
+      background: #8b1a1a;
+      color: #e8dcc8;
+      padding: 1px 5px;
+      font-size: 11px;
+      margin-right: 4px;
+      border-radius: 2px;
+    }
+
+    .rules-body ul {
+      list-style: none;
+      padding-left: 12px;
+    }
+
+    .rules-body ul li::before {
+      content: "•";
+      color: #8b1a1a;
+      margin-right: 4px;
+    }
+
+    /* Bottom section */
+    .bottom-section {
+      display: flex;
+      min-height: 260px;
+      position: relative;
+      z-index: 5;
+    }
+
+    .bottom-left {
+      width: 68px;
+      border-right: 1.5px solid #2c1810;
+      flex-shrink: 0;
+    }
+
+    .bottom-content {
+      flex: 1;
+      display: flex;
+    }
+
+    .bottom-col {
+      flex: 1;
+      border-right: 1px solid #999;
+      padding: 6px;
+      writing-mode: vertical-rl;
+      font-size: 10.5px;
+      line-height: 1.85;
+      color: #333;
+      text-align: justify;
+    }
+
+    .bottom-col:last-child {
+      border-right: none;
+    }
+
+    .bottom-col .col-title {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      margin-left: 4px;
+      font-family: "Ma Shan Zheng", cursive;
+      color: #1a0f0a;
+    }
+
+    .bottom-highlight {
+      width: 180px;
+      border-right: 1px solid #999;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .bottom-highlight .hl-title {
+      writing-mode: vertical-rl;
+      font-size: 18px;
+      font-family: "Ma Shan Zheng", cursive;
+      color: #1a0f0a;
+      letter-spacing: 3px;
+      line-height: 1.5;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    /* Seal stamps */
+    .seal {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 3px solid #b33a3a;
+      color: #b33a3a;
+      font-family: "Ma Shan Zheng", cursive;
+      border-radius: 4px;
+      padding: 2px;
+      transform: rotate(-5deg);
+      opacity: 0.85;
+      line-height: 1;
+    }
+
+    .seal.large {
+      width: 54px;
+      height: 54px;
+      font-size: 14px;
+      writing-mode: vertical-rl;
+      letter-spacing: 2px;
+      border-width: 3px;
+    }
+
+    .seal.small {
+      width: 36px;
+      height: 36px;
+      font-size: 11px;
+      border-width: 2px;
+    }
+
+    .seal.round {
+      border-radius: 50%;
+      width: 48px;
+      height: 48px;
+      font-size: 12px;
+      writing-mode: vertical-rl;
+    }
+
+    /* Decorative corners */
+    .corner-deco {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-color: #8b1a1a;
+      border-style: solid;
+      z-index: 10;
+      opacity: 0.5;
+    }
+
+    .corner-deco.tl {
+      top: 10px;
+      left: 10px;
+      border-width: 2px 0 0 2px;
+    }
+
+    .corner-deco.tr {
+      top: 10px;
+      right: 10px;
+      border-width: 2px 2px 0 0;
+    }
+
+    .corner-deco.bl {
+      bottom: 10px;
+      left: 10px;
+      border-width: 0 0 2px 2px;
+    }
+
+    .corner-deco.br {
+      bottom: 10px;
+      right: 10px;
+      border-width: 0 2px 2px 0;
+    }
+
+    /* Watermark text */
+    .watermark {
+      position: absolute;
+      bottom: 8px;
+      right: 12px;
+      font-size: 9px;
+      color: rgba(100, 80, 50, 0.3);
+      z-index: 5;
+      letter-spacing: 1px;
+    }
+
+    /* Editable highlight */
+    [contenteditable="true"]:hover {
+      outline: 1px dashed rgba(139, 26, 26, 0.3);
+      outline-offset: 2px;
+      cursor: text;
+    }
+
+    [contenteditable="true"]:focus {
+      outline: 2px solid rgba(139, 26, 26, 0.5);
+      outline-offset: 2px;
+      background: rgba(255, 255, 200, 0.1);
+    }
+
+    /* Responsive */
+    @media (max-width: 920px) {
+      .newspaper-wrapper {
+        margin: 0 auto;
+        overflow: hidden;
+      }
+
+      .newspaper {
+        transform-origin: top left;
+      }
+    }
+
+    /* SVG illustrations */
+    .illust-area {
+      position: relative;
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 4px;
+    }
+
+    .illust-area svg {
+      opacity: 0.65;
+      flex-shrink: 0;
+    }
+
+    /* Section borders */
+    .section-border-top {
+      border-top: 1.5px solid #2c1810;
+    }
+
+    .section-border-bottom {
+      border-bottom: 1.5px solid #2c1810;
+    }
+
+    /* Fine adjustments */
+    .v-text {
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+    }
+
+    .h-rule {
+      height: 1px;
+      background: #999;
+      margin: 4px 0;
+    }
+
+    .h-rule.thick {
+      height: 2px;
+      background: #2c1810;
+    }
+
+    /* Bottom seal area */
+    .bottom-seals {
+      position: absolute;
+      bottom: 15px;
+      right: 20px;
+      display: flex;
+      gap: 8px;
+      z-index: 10;
+    }
+
+    /* Stain effects */
+    .stain {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 3;
+      opacity: 0.08;
+    }
+
+    .stain.s1 {
+      width: 120px;
+      height: 80px;
+      background: radial-gradient(ellipse,
+          rgba(120, 90, 50, 0.5),
+          transparent);
+      top: 200px;
+      right: 100px;
+    }
+
+    .stain.s2 {
+      width: 80px;
+      height: 100px;
+      background: radial-gradient(ellipse,
+          rgba(100, 80, 40, 0.4),
+          transparent);
+      bottom: 150px;
+      left: 120px;
+    }
+
+    .stain.s3 {
+      width: 150px;
+      height: 60px;
+      background: radial-gradient(ellipse,
+          rgba(130, 100, 60, 0.3),
+          transparent);
+      top: 500px;
+      left: 300px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="toolbar">
+    <h1>📰 广陵报纸生成器</h1>
+    <div class="toolbar-buttons">
+      <button id="btn-close-embed" style="display: none" onclick="closeEmbed()">← 返回公告</button>
+      <button id="btn-toggle-edit" onclick="toggleEdit()">✏️ 编辑模式</button>
+      <button onclick="exportImage()">📷 导出图片</button>
+      <button onclick="window.print()">🖨️ 打印</button>
+      <button onclick="resetContent()">🔄 重置内容</button>
+      <button id="btn-change-theme" onclick="changeTheme()">🎨 换色：宣纸朱红</button>
+    </div>
+    <div class="toolbar-tip">
+      💡 点击"编辑模式"后，可直接点击报纸上的文字进行编辑</br>
+      💡 文字多少和原模板不一致时，可以采用换行键调整排版
+    </div>
+  </div>
+
+  <div class="newspaper-wrapper">
+    <div id="newspaper" class="newspaper">
+      <!-- Stain effects -->
+      <div class="stain s1"></div>
+      <div class="stain s2"></div>
+      <div class="stain s3"></div>
+
+      <!-- Corner decorations -->
+      <div class="corner-deco tl"></div>
+      <div class="corner-deco tr"></div>
+      <div class="corner-deco bl"></div>
+      <div class="corner-deco br"></div>
+
+      <!-- Red banner -->
+      <div class="red-banner"></div>
+
+      <!-- Header -->
+      <div class="header" style="display: flex; align-items: center">
+        <div class="header-left" style="display: flex; align-items: center">
+          <div class="sidebar-title" data-field="sidebarTitle" style="
+                writing-mode: vertical-rl;
+                font-size: 22px;
+                font-family: &quot;Ma Shan Zheng&quot;, cursive;
+                letter-spacing: 6px;
+                color: #1a0f0a;
+                margin-right: 15px;
+              ">
+            广陵话题榜
+          </div>
+          <div style="
+                display: flex;
+                gap: 8px;
+                margin-right: 15px;
+                align-items: flex-start;
+              ">
+            <div style="width: 1px; height: 170px; background-color: #2c1810"></div>
+            <div style="width: 1px; height: 170px; background-color: #2c1810"></div>
+          </div>
+          <div style="display: flex; gap: 15px">
+            <div data-field="topic1" style="
+                  writing-mode: vertical-rl;
+                  font-size: 13px;
+                  color: #444;
+                  margin-top: 10px;
+                ">
+              # 观星台预警：寒潮 降温
+            </div>
+            <div data-field="topic2" style="
+                  writing-mode: vertical-rl;
+                  font-size: 13px;
+                  color: #444;
+                  margin-top: 10px;
+                ">
+              # 暴风雪天气即将降临！
+            </div>
+            <div data-field="topic3" style="
+                  writing-mode: vertical-rl;
+                  font-size: 13px;
+                  color: #444;
+                  margin-top: 10px;
+                ">
+              # 渔村渡口的慢时光
+            </div>
+            <div data-field="topic4" style="
+                  writing-mode: vertical-rl;
+                  font-size: 13px;
+                  color: #444;
+                  margin-top: 10px;
+                ">
+              # 副官同殿下下公然洗白广陵顶流
+            </div>
+            <div data-field="topic5" style="
+                  writing-mode: vertical-rl;
+                  font-size: 13px;
+                  color: #444;
+                  margin-top: 10px;
+                ">
+              # 当密探走路学会用腰发力
+            </div>
+            <div data-field="topic6" style="
+                  writing-mode: vertical-rl;
+                  font-size: 13px;
+                  color: #444;
+                  margin-top: 10px;
+                ">
+              # 《狂风绒绒》第二回全线热映
+            </div>
+          </div>
+        </div>
+        <div class="header-right">
+          <div style="display: flex; align-items: center">
+            <div class="title-vertical-line"></div>
+            <div class="title-block">
+              <div class="title-chars">
+                <span class="title-char c1" data-field="t1">广</span>
+                <span class="title-char c2" data-field="t2">陵</span>
+                <span class="title-char c3" data-field="t3">爆</span>
+                <span class="title-char c4" data-field="t4">报</span>
+              </div>
+            </div>
+          </div>
+          <div style="
+                display: flex;
+                align-items: center;
+                gap: 15px;
+                padding-right: 20px;
+                margin-top: 2px;
+              ">
+            <div class="subtitle-line" data-field="subtitle">
+              大汉绣衣校尉
+            </div>
+            <div class="date-line" data-field="date">啾啾啾年啾月啾日</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hashtag bar -->
+      <div class="hashtag-bar"></div>
+
+      <!-- Main layout -->
+      <div class="main-layout">
+        <!-- Content area -->
+        <div class="content-area">
+          <div class="content-top">
+            <!-- Left story columns -->
+            <div class="left-articles">
+              <div class="story-col" data-field="story1">
+                暮色四合，雨幕降临。曲阿戏坊深处，一双骨节分明的手轻轻拂过惠王剑。低沉的声音喃喃自语：“今夜，既是与王弟交锋，也是与王弟交心之时！”惠王剑的寒光一闪，映照出一双深沉的红瞳，暴戾的杀气在眼中翻腾不息，最后的决战，即将来临——</br>
+                王兄剑眉轻抬，朝来人打了个招呼：“你来了！”王弟并没有要应答的意思，不动声色地架起姿势，隐光剑锋挥动，划出一道漂亮的弧线。王兄哈哈大笑，将最后一杯蒲桃酒饮下：“好啊，好啊，我们速战速决！”话音刚落，就提起惠王剑，向前刺去！</br>
+                说时迟那时快！两柄剑都已全力刺出！这已是最后一剑，已是决胜负的一剑。直到现在，王兄才发现自己的剑慢了一步，当他的剑刺入王弟的胸膛时，王弟的剑必将刺穿他的喉咙！这命运，他已不能不接受。可就在这时候，他又发现隐光的剑势有了些偏差，也许只不过是一两寸间的偏差，就已经是生与死之间的距离。在这样近的距离下，他看清了王弟，凌厉而纯粹的目光，如同世间最纯粹的宝石。“因美色动心有什么不好意思的，这才是最纯粹的动心吧！”王兄合上他的双眼，听凭那不可知的天命裁决！</br>
+                曲阿戏坊，倾力奉献！《双王剑斗，决战曲阿之巅》即将开演！那场双王剑斗的结局是虎落还是龙坠，除却亲历者无人可知……
+              </div>
+            </div>
+
+            <!-- Center area -->
+            <div class="center-area">
+              <div class="big-headline">
+                <div class="headline-group">
+                  <div class="bao" data-field="bao">爆</div>
+                  <div class="headline-cols">
+                    <div class="sub-title" data-field="headline2">
+                      决战曲阿之巅！
+                    </div>
+                    <div class="main-title" data-field="headline1">
+                      双王剑斗！
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="fun-line-box">
+                <div class="fun-line" data-field="funLine">
+                  上班可以玩同事！
+                </div>
+              </div>
+              <div class="fluffy-section">
+                <div class="fluffy-content" data-field="fluffyContent">
+                  为丰富密探生活，提升工作效率，近期，广陵绣衣楼组织了第一次
+                  “绒绒开放日”。各位密探可以携带自家的宠物前来广陵绣衣楼本部，并和各位同好交流。<br />
+                  广陵王正式参与了本次活动。在长乐殿中，广陵王正式给飞云颁发了
+                  “长乐长生大将军”
+                  称号，并赐小狗屋一间，封赏得到后的飞云，欣喜异常，摇动的尾巴好似一只小手，兴奋地向诸位展示它的功勋。飞云可爱！飞云聪明！<br />
+                  本次 “绒绒开放日”
+                  活动由西凉爱狗男发起。他表示，在第一次见到飞云时，就认为绣衣楼里应该都是好人。此人就如何养狗、遛狗、爱狗等关键问题，与楼主和副官进行了事无巨细的交流。西凉爱狗男结合自身环境优势以及成长经历，向绣衣楼分享了诸如
+                  “反毛护理”“猛兽驯化”“狼与犬的协同作战”
+                  等宝贵经验。“白天训练，晚上巡查，只要是跟姊妹们在一起，这些士兵看起来都很开心。有人害怕，给姊姊喂点吃的，亲近亲近，就会知道它们是多么通人性的生灵……”
+                </div>
+                <div class="fluffy-title" data-field="fluffyTitle">
+                  绣衣楼组织绒绒开放日
+                </div>
+              </div>
+            </div>
+
+            <!-- Right area -->
+            <div class="right-area">
+              <!-- Top article: 桂花 -->
+              <div class="right-top-article">
+                <div class="article-body-vertical" data-field="rightBody1">
+                  进入初冬，王府庭院的桂花迎来了今年的又一次花期！逆时盛放的花朵引人注目，到底是张部的炭盆加热，还是黄月美妆功日导致的异常现象？经本报记者蹲守以及调查发现，是一位阳光开朗的少年，每日在桂花树下给绣衣楼带来了阵阵欢笑。这位少年原本是来绣衣楼借宿，但看到忙碌的后厨辛苦的勤杂人员，心下一阵感动，他按捺不住自己的热心肠，每日准时早起，把花园和厨房打扫得干干净净。在帮厨和义工过程中，少年展露出阳般的笑容，令桂花乃至苗圃中的其他植物纷纷朝着少年的方向生长，盛放，所以才有了这冬日挂金桂的绝景。
+                </div>
+                <div class="article-headline-vertical red" data-field="rightTitle1">
+                  桂花冬月盛放
+                </div>
+                <div class="article-headline-vertical" data-field="rightTitle2">
+                  背后原因令人暖心
+                </div>
+              </div>
+
+              <!-- Rules container -->
+              <div class="rules-container">
+                <!-- Rules section -->
+                <div class="rules-section">
+                  <div class="rules-title" data-field="rulesTitle">
+                    关于各部考勤和请假<br />的暂行规定（节选）
+                  </div>
+                  <div class="rules-body">
+                    <p data-field="rulesIntro">
+                      近期，发现有部分密探，存在上班长期迟到、不到，甚至旷空饷、破坏书房公物等问题。为加强密探管理，严明纪律，提高工作效率，结合绣衣楼实际情况，特制定本规定：
+                    </p>
+                    <div class="chapter" data-field="chapter1">
+                      <em>第一章</em> 总则
+                    </div>
+                    <p data-field="rule1">
+                      大汉校尉直属机关绣衣楼四部登记密探参照本规定执行，闲人密探可据实际情况情执行。
+                    </p>
+                    <div class="chapter" data-field="chapter2">
+                      <em>第二章</em> 请假类别、期限和待遇
+                    </div>
+                    <p data-field="ellipsis">（下略）</p>
+                    <div class="chapter" data-field="chapter4">
+                      <em>第四章</em> 旷职、旷工及其处理
+                    </div>
+                    <p data-field="rule2">
+                      属下列情况之一者，按旷职旷职、旷工处理——
+                    </p>
+                    <ul>
+                      <li data-field="ruleItem1">
+                        长期外派在外，没有按照绣衣规章制度完成定点卯者；
+                      </li>
+                      <li data-field="ruleItem2">
+                        完成调查、刺杀任务后，无法按期完成汇报者；
+                      </li>
+                      <li data-field="ruleItem3">
+                        无视汇报流程，跨门、跨骑、跨级别完成汇报者；
+                      </li>
+                      <li data-field="ruleItem4">
+                        汇报过程中损坏王府以及书房公物（包括花瓶），未完成照价赔偿者；
+                      </li>
+                    </ul>
+                    <p style="margin-top: 4px; font-size: 10px; color: #666" data-field="rulePenalty">
+                      以上内容每触犯一次，计一次过。合计过三次以上者，名单将汇报给楼主，取消当月俸禄并记大过一次。计大过满两次者，将会对密探进行劝退，永不录用。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- content-top end -->
+        </div>
+        <!-- content-area end -->
+      </div>
+      <!-- main-layout end -->
+
+      <div class="watermark">古风报纸生成器 · 点击编辑模式可自定义内容</div>
+    </div>
+  </div>
+
+  <script>
+    let isEditMode = false;
+    const isEmbedded = window.parent && window.parent !== window;
+
+    const RICH_FIELDS = new Set([
+      "story1",
+      "fluffyContent",
+      "rightBody1",
+      "rulesTitle",
+      "rulesIntro",
+      "rule1",
+      "rule2",
+      "rulePenalty",
+      "chapter1",
+      "chapter2",
+      "chapter4",
+    ]);
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function sanitizeRichText(raw, allowEm) {
+      let text = String(raw || "");
+      // Normalize <br>, <br/>, </br>, \n to a safe placeholder
+      text = text.replace(/<\s*\/?\s*br\s*\/?\s*>/gi, "\n");
+      let safe = escapeHtml(text);
+      if (allowEm) {
+        safe = safe.replace(/&lt;em&gt;([\s\S]*?)&lt;\/em&gt;/gi, "<em>$1</em>");
+      }
+      return safe.replace(/\r?\n/g, "<br />");
+    }
+
+    function fitOverflowFields() {
+      const rules = [
+        { sel: ".story-col", min: 9.5 },
+        { sel: ".fluffy-content", min: 9.5 },
+        { sel: ".article-body-vertical", min: 9.5 },
+        { sel: ".rules-body", min: 9.5 },
+        { sel: ".main-title, .sub-title", min: 18 },
+        { sel: ".fluffy-title, .article-headline-vertical", min: 14 },
+        { sel: ".fun-line", min: 13 },
+      ];
+      rules.forEach(({ sel, min }) => {
+        document.querySelectorAll("#newspaper " + sel).forEach((el) => {
+          if (!el.dataset.origFontSize) {
+            const cs = window.getComputedStyle(el);
+            el.dataset.origFontSize = String(parseFloat(cs.fontSize) || 12);
+          }
+          let size = parseFloat(el.dataset.origFontSize);
+          el.style.fontSize = size + "px";
+          let guard = 0;
+          while (
+            guard < 40 &&
+            size > min &&
+            (el.scrollWidth > el.clientWidth + 1 ||
+              el.scrollHeight > el.clientHeight + 1)
+          ) {
+            size = Math.max(min, size - 0.5);
+            el.style.fontSize = size + "px";
+            guard++;
+          }
+        });
+      });
+    }
+
+    function updateMobileScale() {
+      const wrapper = document.querySelector(".newspaper-wrapper");
+      const np = document.getElementById("newspaper");
+      if (!wrapper || !np) return;
+      const avail = Math.max(260, window.innerWidth - 20);
+      if (avail < 900) {
+        const scale = avail / 900;
+        np.style.transformOrigin = "top left";
+        np.style.transform = `scale(${scale})`;
+        wrapper.style.width = Math.floor(900 * scale) + "px";
+        wrapper.style.height = Math.ceil(np.offsetHeight * scale) + "px";
+        wrapper.style.overflow = "hidden";
+      } else {
+        np.style.transform = "";
+        np.style.transformOrigin = "";
+        wrapper.style.width = "";
+        wrapper.style.height = "";
+        wrapper.style.overflow = "";
+      }
+    }
+
+    function renderNewspaper(data) {
+      if (!data || typeof data !== "object") return;
+      const fields = data.fields && typeof data.fields === "object" ? data.fields : data;
+      const els = document.querySelectorAll("#newspaper [data-field]");
+      els.forEach((el) => {
+        const key = el.getAttribute("data-field");
+        if (!key || !(key in fields)) return;
+        const val = fields[key];
+        if (val === undefined || val === null) return;
+        const strVal = String(val);
+        if (!strVal.trim()) return;
+        if (RICH_FIELDS.has(key)) {
+          const allowEm = key.startsWith("chapter");
+          el.innerHTML = sanitizeRichText(strVal, allowEm);
+        } else {
+          el.textContent = strVal;
+        }
+      });
+      if (typeof data.themeIndex === "number") {
+        applyTheme(data.themeIndex);
+      }
+      requestAnimationFrame(() => {
+        fitOverflowFields();
+        updateMobileScale();
+      });
+    }
+    window.renderNewspaper = renderNewspaper;
+
+    function closeEmbed() {
+      if (isEmbedded) {
+        window.parent.postMessage({ type: "NEWSPAPER_CLOSE" }, "*");
+      }
+    }
+
+    function toggleEdit() {
+      isEditMode = !isEditMode;
+      const els = document.querySelectorAll("#newspaper [data-field]");
+      els.forEach((el) => {
+        el.contentEditable = isEditMode ? "true" : "false";
+      });
+      const btn = document.getElementById("btn-toggle-edit");
+      if (btn) {
+        btn.textContent = isEditMode ? "👁️ 预览模式" : "✏️ 编辑模式";
+        btn.style.background = isEditMode ? "#27ae60" : "#3a3a3a";
+        btn.style.borderColor = isEditMode ? "#27ae60" : "#555";
+      }
+    }
+
+    function exportImage() {
+      const el = document.getElementById("newspaper");
+      const wrapper = document.querySelector(".newspaper-wrapper");
+      const editables = el.querySelectorAll('[contenteditable="true"]');
+      editables.forEach((e) => (e.contentEditable = "false"));
+
+      const bgColor = themes[themeIndex]?.bg || "#e5d8c0";
+      const finishExport = (dataUrl) => {
+        const link = document.createElement("a");
+        link.download = "广陵日报_" + new Date().getTime() + ".png";
+        link.href = dataUrl;
+        link.click();
+        if (isEmbedded) {
+          window.parent.postMessage(
+            { type: "NEWSPAPER_EXPORTED", dataUrl },
+            "*",
+          );
+        }
+      };
+
+      const runWithHtml2Canvas = () => {
+        const prevTransform = el.style.transform;
+        const prevOrigin = el.style.transformOrigin;
+        const prevWrapperW = wrapper ? wrapper.style.width : "";
+        const prevWrapperH = wrapper ? wrapper.style.height : "";
+        const prevWrapperOverflow = wrapper ? wrapper.style.overflow : "";
+        el.style.transform = "none";
+        el.style.transformOrigin = "top left";
+        if (wrapper) {
+          wrapper.style.width = "900px";
+          wrapper.style.height = "";
+          wrapper.style.overflow = "visible";
+        }
+        const targetH = Math.max(1260, el.scrollHeight);
+        html2canvas(el, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: bgColor,
+          width: 900,
+          height: targetH,
+          windowWidth: 1000,
+          windowHeight: targetH + 100,
+          scrollX: 0,
+          scrollY: 0,
+          logging: false,
+        })
+          .then((canvas) => finishExport(canvas.toDataURL("image/png")))
+          .finally(() => {
+            el.style.transform = prevTransform;
+            el.style.transformOrigin = prevOrigin;
+            if (wrapper) {
+              wrapper.style.width = prevWrapperW;
+              wrapper.style.height = prevWrapperH;
+              wrapper.style.overflow = prevWrapperOverflow;
+            }
+            if (isEditMode) {
+              editables.forEach((e) => (e.contentEditable = "true"));
+            }
+          });
+      };
+
+      const runCapture = () => {
+        // 优先使用 html-to-image（SVG foreignObject 原生支持 writing-mode: vertical-rl，不会错位）
+        if (window.htmlToImage && typeof window.htmlToImage.toPng === "function") {
+          const targetH = Math.max(1260, el.scrollHeight);
+          window.htmlToImage
+            .toPng(el, {
+              width: 900,
+              height: targetH,
+              pixelRatio: 2,
+              backgroundColor: bgColor,
+              cacheBust: true,
+              style: {
+                transform: "none",
+                transformOrigin: "top left",
+                margin: "0",
+              },
+            })
+            .then((dataUrl) => {
+              finishExport(dataUrl);
+              if (isEditMode) {
+                editables.forEach((e) => (e.contentEditable = "true"));
+              }
+            })
+            .catch((err) => {
+              console.warn("htmlToImage 导出失败，降级使用 html2canvas:", err);
+              if (typeof html2canvas !== "undefined") {
+                runWithHtml2Canvas();
+              } else if (isEditMode) {
+                editables.forEach((e) => (e.contentEditable = "true"));
+              }
+            });
+          return;
+        }
+        if (typeof html2canvas !== "undefined") {
+          runWithHtml2Canvas();
+          return;
+        }
+        const s1 = document.createElement("script");
+        s1.src = "https://unpkg.com/html-to-image@1.11.11/dist/html-to-image.js";
+        s1.onload = () => exportImage();
+        s1.onerror = () => {
+          const s2 = document.createElement("script");
+          s2.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+          s2.onload = () => exportImage();
+          document.head.appendChild(s2);
+        };
+        document.head.appendChild(s1);
+        alert("正在加载导出组件，请稍后再试...");
+      };
+
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(runCapture).catch(runCapture);
+      } else {
+        runCapture();
+      }
+    }
+
+    function resetContent() {
+      if (confirm("确定要重置所有内容为默认值吗？")) {
+        location.reload();
+      }
+    }
+
+    let themeIndex = 0;
+    const themes = [
+      { name: "宣纸朱红", bg: "#e5d8c0", text: "#2c1810", accent: "#8b1a1a", tint: "rgba(232, 196, 122, 0.22)" },
+      { name: "素笺墨蓝", bg: "#ebe7dc", text: "#1a2234", accent: "#223a5e", tint: "rgba(159, 188, 208, 0.24)" },
+      { name: "古卷赭茶", bg: "#e6dcc8", text: "#2d1b00", accent: "#7a4419", tint: "rgba(210, 168, 129, 0.25)" },
+      { name: "竹简黛绿", bg: "#dfe6de", text: "#1a2e1f", accent: "#2d5a3b", tint: "rgba(168, 200, 186, 0.26)" },
+    ];
+
+    function applyTheme(idx) {
+      themeIndex = ((idx % themes.length) + themes.length) % themes.length;
+      const t = themes[themeIndex];
+      const np = document.querySelector(".newspaper");
+      if (!np) return;
+      np.style.backgroundColor = t.bg;
+      np.style.color = t.text;
+      document
+        .querySelectorAll(
+          ".seal, .article-headline-vertical.red, .big-headline .bao, .rules-body .chapter",
+        )
+        .forEach((el) => {
+          el.style.color = t.accent;
+          el.style.borderColor = t.accent;
+        });
+      document.querySelectorAll(".rules-body .chapter em").forEach((el) => {
+        el.style.backgroundColor = t.accent;
+        el.style.color = t.bg;
+      });
+      document.querySelectorAll(".corner-deco").forEach((el) => {
+        el.style.borderColor = t.accent;
+      });
+      document.querySelectorAll(".title-block").forEach((el) => {
+        el.style.backgroundColor = t.accent;
+      });
+      document.querySelectorAll(".fun-line").forEach((el) => {
+        el.style.backgroundColor = t.tint;
+      });
+      document.querySelectorAll(".red-banner").forEach((el) => {
+        el.style.background = `linear-gradient(90deg, ${t.accent}, ${t.accent}88, ${t.accent})`;
+      });
+      const themeBtn = document.getElementById("btn-change-theme");
+      if (themeBtn) themeBtn.textContent = "🎨 换色：" + t.name;
+    }
+
+    function changeTheme() {
+      applyTheme(themeIndex + 1);
+    }
+
+    window.addEventListener("resize", updateMobileScale);
+    window.addEventListener("DOMContentLoaded", () => {
+      fitOverflowFields();
+      updateMobileScale();
+    });
+
+    // Bridge listener for parent iframe communication (file:// safe via event.source)
+    window.addEventListener("message", (event) => {
+      if (isEmbedded && event.source !== window.parent) return;
+      const msg = event.data;
+      if (!msg || typeof msg !== "object") return;
+      if (msg.type === "NEWSPAPER_DATA") {
+        renderNewspaper(msg.payload || msg.data || {});
+        if (isEmbedded) {
+          window.parent.postMessage({ type: "NEWSPAPER_RENDERED" }, "*");
+        }
+      } else if (msg.type === "NEWSPAPER_EXPORT") {
+        exportImage();
+      } else if (msg.type === "NEWSPAPER_THEME" && typeof msg.themeIndex === "number") {
+        applyTheme(msg.themeIndex);
+      }
+    });
+
+    if (isEmbedded) {
+      const closeBtn = document.getElementById("btn-close-embed");
+      if (closeBtn) closeBtn.style.display = "inline-block";
+      window.parent.postMessage({ type: "NEWSPAPER_READY" }, "*");
+    }
+
+    // Preload html-to-image (primary, native vertical-rl support) & html2canvas (fallback)
+    (function () {
+      const s0 = document.createElement("script");
+      s0.src = "https://unpkg.com/html-to-image@1.11.11/dist/html-to-image.js";
+      s0.async = true;
+      document.head.appendChild(s0);
+
+      const s = document.createElement("script");
+      s.src =
+        "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+      s.async = true;
+      document.head.appendChild(s);
+    })();
+  </script>
+</body>
+
+</html>

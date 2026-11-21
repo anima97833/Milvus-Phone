@@ -3162,12 +3162,15 @@
       .forum-overlay .forum-container {
         width: 100%;
         margin: 0;
-        height: 100%;
+        flex: 1;
+        min-height: 0;
+        height: auto;
         padding: 0;
         display: flex;
         flex-direction: column;
         background: var(--bg-color);
         position: relative;
+        overflow: hidden;
       }
 
       .forum-overlay .forum-header {

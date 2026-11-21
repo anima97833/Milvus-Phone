@@ -185,20 +185,82 @@
     '左慈': ['BV1XN4AenETx', 'BV11z421D75F', 'BV1vW41147aZ', 'BV1xs411r7Fh']
   };
 
-  // 3.1 根据关键词搜索 B 站，提取真实热门视频 BV 号列表（超时放宽至 18s，并做关键词精简）
-  async function searchBilibiliVideos(keyword, limit = 6) {
-    if (!keyword || !keyword.trim()) return [];
-    // 清洗关键词：剔除标点与过长修饰词，保留核心 2-4 个词组
-    const cleanKw = keyword.replace(/[《》""''“”‘’!！?？,，.。:：\-—_]/g, ' ')
+  function extractKwTokens(keyword) {
+    return String(keyword || '')
+      .replace(/[《》""''“”‘’!！?？,，.。:：\-—_\/]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
       .split(' ')
-      .slice(0, 3)
-      .join(' ');
+      .filter(Boolean);
+  }
 
+  function scoreTextRelevance(text, tokens) {
+    if (!text || !tokens || tokens.length === 0) return 0;
+    const hay = String(text).toLowerCase();
+    let score = 0;
+    for (const tok of tokens) {
+      const t = tok.toLowerCase();
+      if (hay.includes(t)) {
+        score += 3;
+      } else if (t.length >= 2) {
+        // 拆分成 2 字核心词做模糊命中（如 "古法调香" 命中 "调香"）
+        for (let i = 0; i <= t.length - 2; i++) {
+          if (hay.includes(t.slice(i, i + 2))) {
+            score += 1;
+            break;
+          }
+        }
+      }
+    }
+    return score;
+  }
+
+  // 3.1 根据关键词搜索 B 站，优先调用官方结构化搜索 API 避免抓到首页推荐广告 BV 号
+  async function searchBilibiliVideos(keyword, limit = 6) {
+    if (!keyword || !keyword.trim()) return [];
+    const tokens = extractKwTokens(keyword).slice(0, 3);
+    const cleanKw = tokens.join(' ');
+    if (!cleanKw) return [];
+
+    // 优先 1：B站官方视频搜索 JSON 接口（只返回匹配词的视频，不混入首页推荐）
+    try {
+      const apiUrl = `https://r.jina.ai/https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=${encodeURIComponent(cleanKw)}`;
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), 14000) : null;
+      try {
+        const res = await fetch(apiUrl, { signal: controller ? controller.signal : undefined, headers: { Accept: 'application/json, text/plain' } });
+        if (res.ok) {
+          const text = await res.text();
+          const jsonStart = text.indexOf('{"code":0');
+          if (jsonStart !== -1) {
+            const json = JSON.parse(text.slice(jsonStart).trim());
+            const list = json?.data?.result;
+            if (Array.isArray(list) && list.length > 0) {
+              const scored = list
+                .filter(item => item && item.bvid && /^BV[a-zA-Z0-9]{10}$/i.test(item.bvid))
+                .map(item => {
+                  const cleanTitle = String(item.title || '').replace(/<[^>]+>/g, '');
+                  const rel = scoreTextRelevance(`${cleanTitle} ${item.tag || ''} ${item.description || ''}`, tokens);
+                  return { bvid: item.bvid, title: cleanTitle, rel };
+                })
+                .sort((a, b) => b.rel - a.rel);
+              const matched = scored.filter(x => x.rel > 0).map(x => x.bvid);
+              if (matched.length > 0) return [...new Set(matched)].slice(0, limit);
+              if (scored.length > 0) return [...new Set(scored.map(x => x.bvid))].slice(0, limit);
+            }
+          }
+        }
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    } catch (e) {
+      console.warn('[NuoStudy] B站结构化搜索接口波动，尝试网页搜索:', e.message);
+    }
+
+    // 降级 2：移动版搜索页（仅作备选，后续还会由详情页标题做相关性校验）
     const url = `https://r.jina.ai/https://m.bilibili.com/search?keyword=${encodeURIComponent(cleanKw)}`;
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timer = controller ? setTimeout(() => controller.abort(), 18000) : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 16000) : null;
     try {
       const res = await fetch(url, { signal: controller ? controller.signal : undefined, headers: { Accept: 'text/plain' } });
       if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -451,14 +513,14 @@
   // 6. AI 业务引擎：名士思考B站搜索词 ➜ 搜真实BV ➜ 批注笔记 ➜ 报班反馈
   // ----------------------------------------------------------------------------
 
-  // 6.1 名士思考适合自己的真实 B 站课程搜索词与动机
+  // 6.1 名士思考适合自己的真实 B 站课程搜索词与动机（一次生成 3-5 门，分布于 正在攻克 / 待研习 / 荣誉结课）
   async function generateCharacterStudyIdea(char, existingTitles = []) {
     const { userPersona, worldContext } = await getContextInfo();
     const prompt = [
       {
         role: 'system',
         content: `你正在沉浸式扮演《代号鸢》中的名士【${char.name}】。
-你正在小手机复古书斋「傩·修业」中，想要在哔哩哔哩（B站）上寻找一门最契合你当下心境、性格、彼此羁绊与MBTI的真实公开课或技能教学。
+你正在小手机复古书斋「傩·修业」中，想要在哔哩哔哩（B站）上规划一组（3到5门）最契合你当下心境、性格、彼此羁绊与MBTI的真实公开课或技能教学，分别放入【正在攻克】【待研习】【荣誉结课】三个书架。
 
 【你的全息人设配置】：
 - 姓名：${char.name} (ID: ${char.id})
@@ -472,24 +534,53 @@
 【世界书背景】：${worldContext ? worldContext.slice(0, 400) : '汉末三国风云，共守广陵。'}
 
 【任务要求】：
-请根据你的性格与当下想暗暗提升的技能，思考：
-1. searchKeyword: 一个高度精准简短的 B 站搜索关键词（2-4个字词，如：初级会计 实务、民法典 合同、猫咪行为学 入门、双人成行 技巧、宋代点茶、量子力学 导论、综合格斗 步伐）。
-2. candidateBvid: （可选）如果你确知该主题在 B 站极具代表性的真实 BV 号（如罗翔刑法 BV1Wx4y1B7HX、初级会计 BV1xm42137D1、猫咪行为学 BV1aV4y1k7Yt 等），请附带；若不确定则填空字符串 ""。
-3. motivation: 你的第一人称专属学习动机与给楼主看的心境说明（60-120字，强烈体现口癖、第一人称自称，傲娇吐槽或深层情感）。
-${existingTitles.length ? `避开已有课程：${existingTitles.slice(0, 10).join('、')}` : ''}
+请一次性构思 **4 门（3-5 门之间）** 风格各异、高度贴合人设的 B 站真实课程，并合理分配到三个状态：
+- 1~2 门 \`"in_progress"\`（正在攻克）：当前最急需或正在学的核心技能/公开课；
+- 1~2 门 \`"backlog"\`（待研习）：感兴趣但暂未腾出时间学的进阶/趣味课；
+- 1 门 \`"completed"\`（荣誉结课）：你早已掌握或刚啃完结课的拿手好课。
 
-必须直接返回合法 JSON 对象（严禁任何Markdown说明）：
+每门课程包含：
+1. status: 必须是 "in_progress"、"backlog" 或 "completed" 之一。
+2. searchKeyword: 高度精准简短的 B 站搜索关键词（1-2个核心词，如：古法调香、初级会计、猫咪行为学、宋代点茶、综合格斗），每门课关键词必须各不相同，严禁填生僻修饰词。
+3. motivation: 你的第一人称专属学习动机/结课感言（50-100字，强烈体现口癖、第一人称自称，傲娇吐槽或深层情感）。
+${existingTitles.length ? `避开已有课程：${existingTitles.slice(0, 12).join('、')}` : ''}
+
+必须直接返回合法 JSON 对象（严禁任何Markdown说明，不要虚构 BV 号）：
 {
-  "searchKeyword": "初级会计 实务",
-  "candidateBvid": "",
-  "motivation": "（第一人称口癖动机）"
+  "courses": [
+    {
+      "status": "in_progress",
+      "searchKeyword": "古法调香",
+      "motivation": "（第一人称口癖动机）"
+    },
+    {
+      "status": "backlog",
+      "searchKeyword": "宋代点茶",
+      "motivation": "（第一人称口癖动机）"
+    },
+    {
+      "status": "completed",
+      "searchKeyword": "孙子兵法",
+      "motivation": "（第一人称口癖结课心得）"
+    }
+  ]
 }`
       },
-      { role: 'user', content: `请为【${char.name}】构思在 B 站修业的搜索词与动机。` }
+      { role: 'user', content: `请为【${char.name}】一次性构思 3-5 门在 B 站修业的课程清单（覆盖正在攻克、待研习、荣誉结课）。` }
     ];
 
     const text = await callLLM(prompt);
-    return tryParse(text);
+    const parsed = tryParse(text);
+    if (parsed && Array.isArray(parsed.courses) && parsed.courses.length > 0) {
+      return parsed.courses.slice(0, 5);
+    }
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed.slice(0, 5);
+    }
+    if (parsed && parsed.searchKeyword) {
+      return [parsed];
+    }
+    throw new Error('AI 未返回有效的课程清单');
   }
 
   // 6.2 名士为某一具体章节生成手写笔记 / 批注心得
@@ -1049,61 +1140,117 @@ ${existingTitles.length ? `避开已有课程：${existingTitles.slice(0, 10).jo
       const char = characters.find(c => c.name === selectedChar) || characters[0];
 
       setIsGenerating(true);
-      showToast(`✨「${char.name}」正在翻阅 B 站公开课目录...`);
+      showToast(`✨「${char.name}」正在构思 3-5 门 B 站修业书单...`);
       try {
         const existingTitles = courses.filter(c => c.charName === char.name).map(c => c.title);
-        // 1. AI 思考贴合人设的真实搜索词与学习动机
-        const idea = await generateCharacterStudyIdea(char, existingTitles);
-        const kw = idea.searchKeyword || `${char.name} 技能教学`;
+        // 1. AI 一次性构思 3-5 门贴合人设的课程（分布于 正在攻克 / 待研习 / 荣誉结课）
+        const ideas = await generateCharacterStudyIdea(char, existingTitles);
 
-        showToast(`🔍 正在 B 站检索：“${kw}”...`);
-        // 2. 前端根据搜索词动态检索真实 B 站热门 BV 号
-        let bvs = await searchBilibiliVideos(kw, 5);
-
-        // 如果 AI 给出了合法的备选 BV 号，优先合并进来
-        if (idea.candidateBvid && extractBvid(idea.candidateBvid)) {
-          bvs.unshift(extractBvid(idea.candidateBvid));
-        }
-
-        // 若网络搜索超时或中断，自动启用名士专属真课储备库保底，保证绝对不报错中断！
-        if (bvs.length === 0) {
-          const fallbackList = VERIFIED_REAL_BVIDS[char.name] || VERIFIED_REAL_BVIDS['傅融'];
-          bvs = fallbackList;
-        }
-
-        // 3. 挑选一个尚未在库中的真实 BV 号
         const existingBvs = new Set(courses.map(c => c.bvid));
-        const targetBvid = bvs.find(bv => !existingBvs.has(bv)) || bvs[0];
+        let inProgressCount = courses.filter(c => c.charName === char.name && c.status === 'in_progress').length;
+        const createdSummary = { in_progress: 0, backlog: 0, completed: 0 };
+        const skippedKeywords = [];
 
-        // 4. 获取官方真实分 P 章节与时长
-        showToast(`📥 正在装盒真实课程：${targetBvid}...`);
-        const detail = await fetchBilibiliCourseDetail(targetBvid);
-
-        const now = Date.now();
-        const newCourse = {
-          id: `course_bili_${detail.bvid}_${now}`,
-          bvid: detail.bvid,
-          title: detail.title,
-          author: detail.author,
-          coverUrl: detail.coverUrl,
-          sourceUrl: detail.sourceUrl,
-          charId: char.id,
-          charName: char.name,
-          charAvatar: char.avatar || '',
-          status: 'in_progress', // 新搜入课程转入正在攻克
-          totalChapters: detail.totalChapters,
-          completedChapters: 0,
-          totalDurationSeconds: detail.totalDurationSeconds,
-          dailyGoalMinutes: 30,
-          learningMotivation: idea.motivation || `欲解天下事务，当先精研此课。`,
-          chapters: detail.chapters,
-          createdAt: now,
-          updatedAt: now
+        // 关键词变体：完整词 → 各单词 → 长词的末两字核心名词（如“古法调香”→“调香”）
+        const buildKeywordVariants = (kw) => {
+          const tokens = extractKwTokens(kw);
+          const variants = [];
+          const push = (v) => {
+            const t = String(v || '').trim();
+            if (t && !variants.includes(t)) variants.push(t);
+          };
+          push(tokens.slice(0, 3).join(' '));
+          tokens.forEach(t => push(t));
+          tokens.forEach(t => { if (t.length >= 4) push(t.slice(-2)); });
+          return variants.slice(0, 5);
         };
 
-        await saveCourse(newCourse);
+        // 逐门“搜一门 → 校验 → 装一门 → 刷新看板 → 再搜下一门”
+        for (let idx = 0; idx < ideas.length; idx++) {
+          const idea = ideas[idx] || {};
+          const kw = (idea.searchKeyword || '').trim();
+          if (!kw) { skippedKeywords.push('(空关键词)'); continue; }
+          showToast(`🔍 (${idx + 1}/${ideas.length}) 正在检索：“${kw}”...`);
+
+          // 2~3. 依次尝试关键词变体：搜索 → 拉取真实标题 → 必须命中该变体关键词才装载
+          //      严禁再回退到与关键词无关的“名士储备库”课程，宁可跳过也不装错
+          let detail = null;
+          for (const variant of buildKeywordVariants(kw)) {
+            const vTokens = extractKwTokens(variant);
+            const bvs = await searchBilibiliVideos(variant, 6);
+            const pool = bvs.filter(bv => !existingBvs.has(bv)).slice(0, 4);
+            for (const bv of pool) {
+              let d = null;
+              try { d = await fetchBilibiliCourseDetail(bv); } catch (e) { d = null; }
+              if (!d || !d.bvid) continue;
+              // 详情接口失败时会返回占位标题“B站公开课 (BV…)”，无法核验相关性，一律不采用
+              if (/^B站公开课 \(/.test(d.title || '')) continue;
+              if (scoreTextRelevance(`${d.title} ${d.intro || ''}`, vTokens) >= 3) {
+                detail = d;
+                break;
+              }
+            }
+            if (detail) break;
+          }
+          if (!detail) {
+            skippedKeywords.push(kw);
+            showToast(`⚠️ 未找到与“${kw}”相符的课程，已跳过`);
+            continue;
+          }
+          existingBvs.add(detail.bvid);
+
+          // 5. 分配目标状态（兼顾 MAX_IN_PROGRESS WIP 限制）
+          let targetStatus = ['in_progress', 'backlog', 'completed'].includes(idea.status)
+            ? idea.status
+            : (idx === 0 ? 'in_progress' : idx === ideas.length - 1 ? 'completed' : 'backlog');
+          if (targetStatus === 'in_progress') {
+            if (inProgressCount >= MAX_IN_PROGRESS) {
+              targetStatus = 'backlog';
+            } else {
+              inProgressCount++;
+            }
+          }
+
+          const chapters = targetStatus === 'completed'
+            ? (detail.chapters || []).map(ch => ({ ...ch, completed: true }))
+            : (detail.chapters || []);
+          const now = Date.now() + idx;
+          const newCourse = {
+            id: `course_bili_${detail.bvid}_${now}`,
+            bvid: detail.bvid,
+            title: detail.title,
+            author: detail.author,
+            coverUrl: detail.coverUrl,
+            sourceUrl: detail.sourceUrl,
+            charId: char.id,
+            charName: char.name,
+            charAvatar: char.avatar || '',
+            status: targetStatus,
+            totalChapters: detail.totalChapters,
+            completedChapters: targetStatus === 'completed' ? detail.totalChapters : 0,
+            totalDurationSeconds: detail.totalDurationSeconds,
+            dailyGoalMinutes: 30,
+            learningMotivation: idea.motivation || `欲解天下事务，当先精研此课。`,
+            chapters,
+            createdAt: now,
+            updatedAt: now
+          };
+
+          await saveCourse(newCourse);
+          createdSummary[targetStatus]++;
+          // 装一门、刷一次看板，让用户立刻看到这一门，再继续搜下一门
+          await loadData();
+          showToast(`✅ (${idx + 1}/${ideas.length}) 已装载《${detail.title}》`);
+        }
+
         await loadData();
-        showToast(`🎉「${char.name}」已成功搜入真课：《${detail.title}》！`);
+        const totalCreated = createdSummary.in_progress + createdSummary.backlog + createdSummary.completed;
+        if (totalCreated > 0) {
+          const skipNote = skippedKeywords.length > 0 ? `，跳过 ${skippedKeywords.length} 门无匹配（${skippedKeywords.join('、')}）` : '';
+          showToast(`🎉「${char.name}」已搜入 ${totalCreated} 门真课（攻克 ${createdSummary.in_progress} · 待研习 ${createdSummary.backlog} · 结课 ${createdSummary.completed}）${skipNote}`);
+        } else {
+          showToast('未能检索到与关键词相符的课程，请稍后重试');
+        }
       } catch (err) {
         console.error(err);
         showToast('搜课失败: ' + (err.message || '网络连接超时'));
