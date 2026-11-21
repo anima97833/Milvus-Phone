@@ -1,7 +1,7 @@
 
 // IndexedDB 数据库配置
 const DB_NAME = "t8_chat_db";
-const DB_VERSION = 51; // 升级数据库版本至 51，新增聊天报告存档表 chat_reports
+const DB_VERSION = 54; // 升级数据库版本至 54，新增情侣空间「沧海一刻」心情日记与习惯记录表
 const STORES = {
   AVATARS: "avatars",
   USER_SETTINGS: "user_settings", // 存储用户设置，包括头像和背景
@@ -23,6 +23,11 @@ const STORES = {
   MCP_LOGS: "mcp_logs", // MCP 调用日志
   MCP_CACHE: "mcp_cache", // MCP 缓存
   CHAT_REPORTS: "chat_reports", // 传讯可视化总结报告存档
+  STORY_LOOM: "story_loom", // 情侣空间「故事织机」双人共写存档
+  INK_POETRY: "ink_poetry", // 情侣空间「笔墨诗书」诗/词/剧/史互赠与评分存档
+  MOMENT_MOODS: "moment_moods", // 情侣空间「沧海一刻」双人心情日记
+  MOMENT_HABITS: "moment_habits", // 情侣空间「沧海一刻」习惯定义（用户/角色）
+  MOMENT_HABIT_LOGS: "moment_habit_logs", // 情侣空间「沧海一刻」每日习惯/经期打卡日志
 };
 
 // 挂载到 window 方便全局使用
@@ -138,6 +143,31 @@ function initAllStores(db) {
     const reportStore = db.createObjectStore(STORES.CHAT_REPORTS, { keyPath: "id" });
     reportStore.createIndex("by_periodType", "periodType", { unique: false });
     reportStore.createIndex("by_createdAt", "createdAt", { unique: false });
+  }
+  if (!db.objectStoreNames.contains(STORES.STORY_LOOM)) {
+    const loomStore = db.createObjectStore(STORES.STORY_LOOM, { keyPath: "id" });
+    loomStore.createIndex("by_charId", "charId", { unique: false });
+    loomStore.createIndex("by_updatedAt", "updatedAt", { unique: false });
+  }
+  if (!db.objectStoreNames.contains(STORES.INK_POETRY)) {
+    const inkStore = db.createObjectStore(STORES.INK_POETRY, { keyPath: "id" });
+    inkStore.createIndex("by_charId", "charId", { unique: false });
+    inkStore.createIndex("by_genre", "genre", { unique: false });
+    inkStore.createIndex("by_updatedAt", "updatedAt", { unique: false });
+  }
+  if (!db.objectStoreNames.contains(STORES.MOMENT_MOODS)) {
+    const moodStore = db.createObjectStore(STORES.MOMENT_MOODS, { keyPath: "id" });
+    moodStore.createIndex("by_charId", "charId", { unique: false });
+    moodStore.createIndex("by_date", "date", { unique: false });
+  }
+  if (!db.objectStoreNames.contains(STORES.MOMENT_HABITS)) {
+    const habitStore = db.createObjectStore(STORES.MOMENT_HABITS, { keyPath: "id" });
+    habitStore.createIndex("by_ownerScope", "ownerScope", { unique: false });
+  }
+  if (!db.objectStoreNames.contains(STORES.MOMENT_HABIT_LOGS)) {
+    const habitLogStore = db.createObjectStore(STORES.MOMENT_HABIT_LOGS, { keyPath: "id" });
+    habitLogStore.createIndex("by_habitId", "habitId", { unique: false });
+    habitLogStore.createIndex("by_date", "date", { unique: false });
   }
 }
 
@@ -3746,8 +3776,317 @@ const chatReportStore = {
   }
 };
 
+// 情侣空间「故事织机」IndexedDB 存储操作（含 user_settings 降级兜底）
+const storyLoomStore = {
+  _readFallback: async (db) => {
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const req = tx.objectStore(STORES.USER_SETTINGS).get("story_loom_fallback");
+        req.onsuccess = () => resolve(Array.isArray(req.result?.value) ? req.result.value : []);
+        req.onerror = () => resolve([]);
+      } catch (e) {
+        resolve([]);
+      }
+    });
+  },
+  _writeFallback: async (db, list) => {
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const req = tx.objectStore(STORES.USER_SETTINGS).put({
+          key: "story_loom_fallback",
+          value: list,
+          updatedAt: Date.now()
+        });
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject("保存故事织机兜底失败");
+      } catch (e) {
+        reject(e);
+      }
+    });
+  },
+  save: async (story) => {
+    const db = await openDB();
+    const rec = { ...story, updatedAt: Date.now() };
+    if (db.objectStoreNames.contains(STORES.STORY_LOOM)) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.STORY_LOOM, "readwrite");
+        const req = tx.objectStore(STORES.STORY_LOOM).put(rec);
+        req.onsuccess = () => resolve(rec);
+        req.onerror = () => reject("保存故事失败");
+      });
+    }
+    const list = await storyLoomStore._readFallback(db);
+    await storyLoomStore._writeFallback(db, [rec, ...list.filter((s) => s.id !== rec.id)]);
+    return rec;
+  },
+  getAll: async () => {
+    const db = await openDB();
+    if (db.objectStoreNames.contains(STORES.STORY_LOOM)) {
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.STORY_LOOM, "readonly");
+        const req = tx.objectStore(STORES.STORY_LOOM).getAll();
+        req.onsuccess = () => resolve((req.result || []).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
+        req.onerror = () => resolve([]);
+      });
+    }
+    const list = await storyLoomStore._readFallback(db);
+    return list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  },
+  getByChar: async (charId) => {
+    const all = await storyLoomStore.getAll();
+    return all.filter((s) => !charId || String(s.charId) === String(charId));
+  },
+  delete: async (id) => {
+    const db = await openDB();
+    if (db.objectStoreNames.contains(STORES.STORY_LOOM)) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.STORY_LOOM, "readwrite");
+        const req = tx.objectStore(STORES.STORY_LOOM).delete(id);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject("删除故事失败");
+      });
+    }
+    const list = await storyLoomStore._readFallback(db);
+    await storyLoomStore._writeFallback(db, list.filter((s) => s.id !== id));
+    return true;
+  }
+};
+
+// 情侣空间「笔墨诗书」IndexedDB 存储操作（含 user_settings 降级兜底）
+const inkPoetryStore = {
+  _readFallback: async (db) => {
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const req = tx.objectStore(STORES.USER_SETTINGS).get("ink_poetry_fallback");
+        req.onsuccess = () => resolve(Array.isArray(req.result?.value) ? req.result.value : []);
+        req.onerror = () => resolve([]);
+      } catch (e) {
+        resolve([]);
+      }
+    });
+  },
+  _writeFallback: async (db, list) => {
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const req = tx.objectStore(STORES.USER_SETTINGS).put({
+          key: "ink_poetry_fallback",
+          value: list,
+          updatedAt: Date.now()
+        });
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject("保存笔墨诗书兜底失败");
+      } catch (e) {
+        reject(e);
+      }
+    });
+  },
+  save: async (record) => {
+    const db = await openDB();
+    const rec = { ...record, updatedAt: Date.now() };
+    if (db.objectStoreNames.contains(STORES.INK_POETRY)) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.INK_POETRY, "readwrite");
+        const req = tx.objectStore(STORES.INK_POETRY).put(rec);
+        req.onsuccess = () => resolve(rec);
+        req.onerror = () => reject("保存作品失败");
+      });
+    }
+    const list = await inkPoetryStore._readFallback(db);
+    await inkPoetryStore._writeFallback(db, [rec, ...list.filter((s) => s.id !== rec.id)]);
+    return rec;
+  },
+  getById: async (id) => {
+    const all = await inkPoetryStore.getAll();
+    return all.find((r) => r.id === id) || null;
+  },
+  getAll: async () => {
+    const db = await openDB();
+    if (db.objectStoreNames.contains(STORES.INK_POETRY)) {
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.INK_POETRY, "readonly");
+        const req = tx.objectStore(STORES.INK_POETRY).getAll();
+        req.onsuccess = () => resolve((req.result || []).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
+        req.onerror = () => resolve([]);
+      });
+    }
+    const list = await inkPoetryStore._readFallback(db);
+    return list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  },
+  getByCharId: async (charId) => {
+    const all = await inkPoetryStore.getAll();
+    return all.filter((s) => !charId || String(s.charId) === String(charId));
+  },
+  delete: async (id) => {
+    const db = await openDB();
+    if (db.objectStoreNames.contains(STORES.INK_POETRY)) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.INK_POETRY, "readwrite");
+        const req = tx.objectStore(STORES.INK_POETRY).delete(id);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject("删除作品失败");
+      });
+    }
+    const list = await inkPoetryStore._readFallback(db);
+    await inkPoetryStore._writeFallback(db, list.filter((s) => s.id !== id));
+    return true;
+  }
+};
+
+// 情侣空间「沧海一刻」IndexedDB 存储操作（心情日记 + 习惯定义 + 每日打卡，含 user_settings 降级兜底）
+const momentCalendarStore = {
+  _readFallback: async (db, key) => {
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const req = tx.objectStore(STORES.USER_SETTINGS).get(key);
+        req.onsuccess = () => resolve(Array.isArray(req.result?.value) ? req.result.value : []);
+        req.onerror = () => resolve([]);
+      } catch (e) {
+        resolve([]);
+      }
+    });
+  },
+  _writeFallback: async (db, key, list) => {
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const req = tx.objectStore(STORES.USER_SETTINGS).put({ key, value: list, updatedAt: Date.now() });
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject("保存沧海一刻兜底失败");
+      } catch (e) {
+        reject(e);
+      }
+    });
+  },
+  saveMood: async (record) => {
+    const db = await openDB();
+    const rec = { ...record, updatedAt: Date.now() };
+    if (db.objectStoreNames.contains(STORES.MOMENT_MOODS)) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.MOMENT_MOODS, "readwrite");
+        const req = tx.objectStore(STORES.MOMENT_MOODS).put(rec);
+        req.onsuccess = () => resolve(rec);
+        req.onerror = () => reject("保存心情日记失败");
+      });
+    }
+    const list = await momentCalendarStore._readFallback(db, "moment_moods_fallback");
+    await momentCalendarStore._writeFallback(db, "moment_moods_fallback", [rec, ...list.filter((r) => r.id !== rec.id)]);
+    return rec;
+  },
+  getMoodsByChar: async (charId) => {
+    const db = await openDB();
+    let all = [];
+    if (db.objectStoreNames.contains(STORES.MOMENT_MOODS)) {
+      all = await new Promise((resolve) => {
+        const tx = db.transaction(STORES.MOMENT_MOODS, "readonly");
+        const req = tx.objectStore(STORES.MOMENT_MOODS).getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => resolve([]);
+      });
+    } else {
+      all = await momentCalendarStore._readFallback(db, "moment_moods_fallback");
+    }
+    return all.filter((r) => !charId || String(r.charId) === String(charId));
+  },
+  saveHabitDef: async (def) => {
+    const db = await openDB();
+    const rec = { ...def, updatedAt: Date.now() };
+    if (db.objectStoreNames.contains(STORES.MOMENT_HABITS)) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.MOMENT_HABITS, "readwrite");
+        const req = tx.objectStore(STORES.MOMENT_HABITS).put(rec);
+        req.onsuccess = () => resolve(rec);
+        req.onerror = () => reject("保存习惯定义失败");
+      });
+    }
+    const list = await momentCalendarStore._readFallback(db, "moment_habits_fallback");
+    await momentCalendarStore._writeFallback(db, "moment_habits_fallback", [rec, ...list.filter((r) => r.id !== rec.id)]);
+    return rec;
+  },
+  getHabitDefsByScope: async (ownerScope) => {
+    const db = await openDB();
+    let all = [];
+    if (db.objectStoreNames.contains(STORES.MOMENT_HABITS)) {
+      all = await new Promise((resolve) => {
+        const tx = db.transaction(STORES.MOMENT_HABITS, "readonly");
+        const req = tx.objectStore(STORES.MOMENT_HABITS).getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => resolve([]);
+      });
+    } else {
+      all = await momentCalendarStore._readFallback(db, "moment_habits_fallback");
+    }
+    return all.filter((r) => !ownerScope || r.ownerScope === ownerScope);
+  },
+  deleteHabitDef: async (id) => {
+    const db = await openDB();
+    if (db.objectStoreNames.contains(STORES.MOMENT_HABITS)) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.MOMENT_HABITS, "readwrite");
+        const req = tx.objectStore(STORES.MOMENT_HABITS).delete(id);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject("删除习惯定义失败");
+      });
+    }
+    const list = await momentCalendarStore._readFallback(db, "moment_habits_fallback");
+    await momentCalendarStore._writeFallback(db, "moment_habits_fallback", list.filter((r) => r.id !== id));
+    return true;
+  },
+  saveHabitLog: async (log) => {
+    const db = await openDB();
+    const rec = { ...log, updatedAt: Date.now() };
+    if (db.objectStoreNames.contains(STORES.MOMENT_HABIT_LOGS)) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.MOMENT_HABIT_LOGS, "readwrite");
+        const req = tx.objectStore(STORES.MOMENT_HABIT_LOGS).put(rec);
+        req.onsuccess = () => resolve(rec);
+        req.onerror = () => reject("保存习惯打卡失败");
+      });
+    }
+    const list = await momentCalendarStore._readFallback(db, "moment_habit_logs_fallback");
+    await momentCalendarStore._writeFallback(db, "moment_habit_logs_fallback", [rec, ...list.filter((r) => r.id !== rec.id)]);
+    return rec;
+  },
+  getHabitLogsByHabit: async (habitId) => {
+    const db = await openDB();
+    let all = [];
+    if (db.objectStoreNames.contains(STORES.MOMENT_HABIT_LOGS)) {
+      all = await new Promise((resolve) => {
+        const tx = db.transaction(STORES.MOMENT_HABIT_LOGS, "readonly");
+        const req = tx.objectStore(STORES.MOMENT_HABIT_LOGS).getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => resolve([]);
+      });
+    } else {
+      all = await momentCalendarStore._readFallback(db, "moment_habit_logs_fallback");
+    }
+    return all.filter((r) => !habitId || r.habitId === habitId);
+  },
+  deleteHabitLog: async (id) => {
+    const db = await openDB();
+    if (db.objectStoreNames.contains(STORES.MOMENT_HABIT_LOGS)) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.MOMENT_HABIT_LOGS, "readwrite");
+        const req = tx.objectStore(STORES.MOMENT_HABIT_LOGS).delete(id);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject("删除打卡记录失败");
+      });
+    }
+    const list = await momentCalendarStore._readFallback(db, "moment_habit_logs_fallback");
+    await momentCalendarStore._writeFallback(db, "moment_habit_logs_fallback", list.filter((r) => r.id !== id));
+    return true;
+  }
+};
+
 if (typeof window !== "undefined") {
   window.chatReportStore = chatReportStore;
+  window.storyLoomStore = storyLoomStore;
+  window.inkPoetryStore = inkPoetryStore;
+  window.momentCalendarStore = momentCalendarStore;
   window.optimizeLocalStorage = optimizeLocalStorage;
   window.restoreEssentialDataFromIndexedDB = restoreEssentialDataFromIndexedDB;
 
