@@ -1,7 +1,7 @@
 
 // IndexedDB 数据库配置
 const DB_NAME = "t8_chat_db";
-const DB_VERSION = 50; // 全面升级数据库版本至 50，确保包含所有表和最新架构
+const DB_VERSION = 51; // 升级数据库版本至 51，新增聊天报告存档表 chat_reports
 const STORES = {
   AVATARS: "avatars",
   USER_SETTINGS: "user_settings", // 存储用户设置，包括头像和背景
@@ -22,6 +22,7 @@ const STORES = {
   MCP_TOOLS: "mcp_tools", // MCP 工具存储
   MCP_LOGS: "mcp_logs", // MCP 调用日志
   MCP_CACHE: "mcp_cache", // MCP 缓存
+  CHAT_REPORTS: "chat_reports", // 传讯可视化总结报告存档
 };
 
 // 挂载到 window 方便全局使用
@@ -132,6 +133,11 @@ function initAllStores(db) {
   // 19. MCP 缓存存储
   if (!db.objectStoreNames.contains(STORES.MCP_CACHE)) {
     db.createObjectStore(STORES.MCP_CACHE, { keyPath: "key" });
+  }
+  if (!db.objectStoreNames.contains(STORES.CHAT_REPORTS)) {
+    const reportStore = db.createObjectStore(STORES.CHAT_REPORTS, { keyPath: "id" });
+    reportStore.createIndex("by_periodType", "periodType", { unique: false });
+    reportStore.createIndex("by_createdAt", "createdAt", { unique: false });
   }
 }
 
@@ -3658,7 +3664,90 @@ async function optimizeLocalStorage() {
   };
 }
 
+// 传讯可视化报告 IndexedDB 存储操作（含 user_settings 降级兜底）
+const chatReportStore = {
+  _fallbackKey: "chat_reports_fallback",
+  _readFallback: async (db) => {
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const req = tx.objectStore(STORES.USER_SETTINGS).get("chat_reports_fallback");
+        req.onsuccess = () => resolve(Array.isArray(req.result?.value) ? req.result.value : []);
+        req.onerror = () => resolve([]);
+      } catch (e) {
+        resolve([]);
+      }
+    });
+  },
+  _writeFallback: async (db, list) => {
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const req = tx.objectStore(STORES.USER_SETTINGS).put({
+          key: "chat_reports_fallback",
+          value: list,
+          updatedAt: Date.now()
+        });
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject("保存报告兜底失败");
+      } catch (e) {
+        reject(e);
+      }
+    });
+  },
+  save: async (report) => {
+    const db = await openDB();
+    if (db.objectStoreNames.contains(STORES.CHAT_REPORTS)) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.CHAT_REPORTS, "readwrite");
+        const req = tx.objectStore(STORES.CHAT_REPORTS).put(report);
+        req.onsuccess = () => resolve(report);
+        req.onerror = () => reject("保存聊天报告失败");
+      });
+    }
+    const list = await chatReportStore._readFallback(db);
+    const next = [report, ...list.filter((r) => r.id !== report.id)];
+    await chatReportStore._writeFallback(db, next);
+    return report;
+  },
+  getAll: async () => {
+    const db = await openDB();
+    if (db.objectStoreNames.contains(STORES.CHAT_REPORTS)) {
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.CHAT_REPORTS, "readonly");
+        const req = tx.objectStore(STORES.CHAT_REPORTS).getAll();
+        req.onsuccess = () => {
+          const res = (req.result || []).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          resolve(res);
+        };
+        req.onerror = () => resolve([]);
+      });
+    }
+    const list = await chatReportStore._readFallback(db);
+    return list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  },
+  getByPeriod: async (periodType) => {
+    const all = await chatReportStore.getAll();
+    return all.filter((r) => !periodType || r.periodType === periodType);
+  },
+  delete: async (id) => {
+    const db = await openDB();
+    if (db.objectStoreNames.contains(STORES.CHAT_REPORTS)) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.CHAT_REPORTS, "readwrite");
+        const req = tx.objectStore(STORES.CHAT_REPORTS).delete(id);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject("删除聊天报告失败");
+      });
+    }
+    const list = await chatReportStore._readFallback(db);
+    await chatReportStore._writeFallback(db, list.filter((r) => r.id !== id));
+    return true;
+  }
+};
+
 if (typeof window !== "undefined") {
+  window.chatReportStore = chatReportStore;
   window.optimizeLocalStorage = optimizeLocalStorage;
   window.restoreEssentialDataFromIndexedDB = restoreEssentialDataFromIndexedDB;
 
