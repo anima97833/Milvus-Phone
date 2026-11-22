@@ -1,283 +1,300 @@
 <!doctype html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    />
-    <!-- ✅ 新增（插入到第 10 行之前）-->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <title>鸢小手机</title>
-    <!-- PWA 配置 -->
-    <link rel="manifest" href="manifest.json" />
-    <meta name="theme-color" content="#766d78" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="鸢小手机" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-    <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
-    <link rel="icon" type="image/png" href="icons/icon-192.png" />
-    <!-- 基础库 -->
-    <link
-      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Quicksand:wght@500;600&family=Zhi+Mang+Xing&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,600;0,700;1,400;1,600&amp;family=Manrope:wght@400;500;700&amp;display=swap"
-      rel="stylesheet"
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
-      rel="stylesheet"
-    />
-    <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/lunar-javascript/lunar.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Phosphor Icons 图标库 -->
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <!-- Mammoth.js 用于 Word .docx 文档解析 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-    <script>
-      if (!window.mammoth) {
-        document.write('<script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"><\/script>');
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <!-- ✅ 新增（插入到第 10 行之前）-->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <title>鸢小手机</title>
+  <!-- PWA 配置 -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#766d78" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="鸢小手机" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <link rel="icon" type="image/png" href="icons/icon-192.png" />
+  <!-- 基础库 -->
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Quicksand:wght@500;600&family=Zhi+Mang+Xing&display=swap"
+    rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,600;0,700;1,400;1,600&amp;family=Manrope:wght@400;500;700&amp;display=swap"
+    rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+    rel="stylesheet" />
+  <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/lunar-javascript/lunar.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Phosphor Icons 图标库 -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <!-- Mammoth.js 用于 Word .docx 文档解析 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <script>
+    if (!window.mammoth) {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"><\/script>');
+    }
+  </script>
+  <!-- JSZip 用于 .epub 电子书解析 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script>
+    if (!window.JSZip) {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"><\/script>');
+    }
+  </script>
+  <!-- Three.js 3D WebGL 渲染引擎 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    if (!window.THREE) {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>');
+    }
+  </script>
+  <!-- Tailwind CSS 与 Node Crypto 防报错 Polyfill -->
+  <script>
+    (function () {
+      if (typeof window !== "undefined") {
+        window.Th = window.Th || {
+          createHash: function () {
+            return {
+              update: function () { return this; },
+              digest: function () { return ""; }
+            };
+          }
+        };
       }
-    </script>
-    <!-- JSZip 用于 .epub 电子书解析 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script>
-      if (!window.JSZip) {
-        document.write('<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"><\/script>');
-      }
-    </script>
-    <!-- Three.js 3D WebGL 渲染引擎 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script>
-      if (!window.THREE) {
-        document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>');
-      }
-    </script>
-    <!-- Tailwind CSS 与 Node Crypto 防报错 Polyfill -->
-    <script>
-      (function() {
-        if (typeof window !== "undefined") {
-          window.Th = window.Th || {
-            createHash: function() {
-              return {
-                update: function() { return this; },
-                digest: function() { return ""; }
-              };
-            }
-          };
-        }
-      })();
-    </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link
-      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap"
-      rel="stylesheet"
-    />
-    <script id="tailwind-config">
-      tailwind.config = {
-        darkMode: "class",
-        theme: {
-          extend: {
-            colors: {
-              "on-background": "#383833",
-              "on-primary-fixed-variant": "#565e4e",
-              "on-tertiary-container": "#613e3f",
-              "surface-container-low": "#fcf9f3",
-              background: "#fffcf7",
-              "secondary-fixed-dim": "#c4d8de",
-              secondary: "#55676d",
-              "primary-dim": "#525b4b",
-              "inverse-primary": "#f4fde7",
-              "tertiary-container": "#f7c5c5",
-              "error-container": "#fd795a",
-              "on-primary-fixed": "#3a4233",
-              "on-secondary-fixed-variant": "#4c5e64",
-              "on-secondary-fixed": "#304247",
-              "surface-container-highest": "#eae8e0",
-              "primary-fixed-dim": "#ced8c3",
-              "on-error-container": "#6e1400",
-              "on-surface-variant": "#65655e",
-              "outline-variant": "#bbb9b2",
-              primary: "#5e6756",
-              error: "#ae4025",
-              "secondary-container": "#d2e6ec",
-              "on-tertiary-fixed-variant": "#6b4747",
-              "tertiary-dim": "#744f4f",
-              "surface-container-lowest": "#ffffff",
-              "secondary-fixed": "#d2e6ec",
-              "on-tertiary": "#ffffff",
-              "secondary-dim": "#495b61",
-              "tertiary-fixed-dim": "#e9b8b8",
-              "error-dim": "#791903",
-              "on-secondary-container": "#43555a",
-              "on-error": "#ffffff",
-              "on-primary-container": "#4c5444",
-              "surface-container-high": "#f0eee6",
-              "on-secondary": "#ffffff",
-              surface: "#fffcf7",
-              "surface-tint": "#5e6756",
-              "surface-dim": "#e4e3da",
-              "on-surface": "#383833",
-              "tertiary-fixed": "#f7c5c5",
-              "inverse-on-surface": "#9e9d98",
-              "on-tertiary-fixed": "#4b2b2c",
-              "on-primary": "#ffffff",
-              tertiary: "#815a5b",
-              "inverse-surface": "#0e0e0c",
-              "primary-container": "#dde6d1",
-              "surface-variant": "#eae8e0",
-              "surface-container": "#f6f3ed",
-              "primary-fixed": "#dde6d1",
-              outline: "#81817a",
-              "surface-bright": "#fffcf7",
-            },
-            fontFamily: {
-              headline: ["Plus Jakarta Sans"],
-              body: ["Be Vietnam Pro"],
-              label: ["Be Vietnam Pro"],
-              display: "Plus Jakarta Sans",
-            },
-            animation: {
-              float: "float 3s ease-in-out infinite",
-            },
-            keyframes: {
-              float: {
-                "0%, 100%": { transform: "translateY(0)" },
-                "50%": { transform: "translateY(-10px)" },
-              },
+    })();
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap"
+    rel="stylesheet" />
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "on-background": "#383833",
+            "on-primary-fixed-variant": "#565e4e",
+            "on-tertiary-container": "#613e3f",
+            "surface-container-low": "#fcf9f3",
+            background: "#fffcf7",
+            "secondary-fixed-dim": "#c4d8de",
+            secondary: "#55676d",
+            "primary-dim": "#525b4b",
+            "inverse-primary": "#f4fde7",
+            "tertiary-container": "#f7c5c5",
+            "error-container": "#fd795a",
+            "on-primary-fixed": "#3a4233",
+            "on-secondary-fixed-variant": "#4c5e64",
+            "on-secondary-fixed": "#304247",
+            "surface-container-highest": "#eae8e0",
+            "primary-fixed-dim": "#ced8c3",
+            "on-error-container": "#6e1400",
+            "on-surface-variant": "#65655e",
+            "outline-variant": "#bbb9b2",
+            primary: "#5e6756",
+            error: "#ae4025",
+            "secondary-container": "#d2e6ec",
+            "on-tertiary-fixed-variant": "#6b4747",
+            "tertiary-dim": "#744f4f",
+            "surface-container-lowest": "#ffffff",
+            "secondary-fixed": "#d2e6ec",
+            "on-tertiary": "#ffffff",
+            "secondary-dim": "#495b61",
+            "tertiary-fixed-dim": "#e9b8b8",
+            "error-dim": "#791903",
+            "on-secondary-container": "#43555a",
+            "on-error": "#ffffff",
+            "on-primary-container": "#4c5444",
+            "surface-container-high": "#f0eee6",
+            "on-secondary": "#ffffff",
+            surface: "#fffcf7",
+            "surface-tint": "#5e6756",
+            "surface-dim": "#e4e3da",
+            "on-surface": "#383833",
+            "tertiary-fixed": "#f7c5c5",
+            "inverse-on-surface": "#9e9d98",
+            "on-tertiary-fixed": "#4b2b2c",
+            "on-primary": "#ffffff",
+            tertiary: "#815a5b",
+            "inverse-surface": "#0e0e0c",
+            "primary-container": "#dde6d1",
+            "surface-variant": "#eae8e0",
+            "surface-container": "#f6f3ed",
+            "primary-fixed": "#dde6d1",
+            outline: "#81817a",
+            "surface-bright": "#fffcf7",
+          },
+          fontFamily: {
+            headline: ["Plus Jakarta Sans"],
+            body: ["Be Vietnam Pro"],
+            label: ["Be Vietnam Pro"],
+            display: "Plus Jakarta Sans",
+          },
+          animation: {
+            float: "float 3s ease-in-out infinite",
+          },
+          keyframes: {
+            float: {
+              "0%, 100%": { transform: "translateY(0)" },
+              "50%": { transform: "translateY(-10px)" },
             },
           },
         },
-      };
-    </script>
-    <!-- Iconify CDN -->
-    <script src="https://code.iconify.design/iconify-icon/1.1.1/iconify-icon.min.js"></script>
-    <!-- HLS.js for Live Audio Streams -->
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
-    <!-- D3.js 库 -->
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+      },
+    };
+  </script>
+  <!-- Iconify CDN -->
+  <script src="https://code.iconify.design/iconify-icon/1.1.1/iconify-icon.min.js"></script>
+  <!-- HLS.js for Live Audio Streams -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+  <!-- D3.js 库 -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
 
-    <link rel="stylesheet" href="Milvus/style.css?v=1795188260085" />
+  <link rel="stylesheet" href="Milvus/style.css?v=1795188260085" />
 
-    <!-- IndexedDB 存储模块 -->
-    <script src="Milvus/db.js?v=1795188260085"></script>
-    <!-- MCP 扩展引擎模块 -->
-    <script src="Milvus/mcp_store.js?v=1795188260085"></script>
+  <!-- IndexedDB 存储模块 -->
+  <script src="Milvus/db.js?v=1795188260085"></script>
+  <!-- MCP 扩展引擎模块 -->
+  <script src="Milvus/mcp_store.js?v=1795188260085"></script>
 
-    <!-- 灵犀生境情境微动效样式 -->
-    <link rel="stylesheet" href="Milvus/live_reactions.css?v=1795188260085" />
+  <!-- 灵犀生境情境微动效样式 -->
+  <link rel="stylesheet" href="Milvus/live_reactions.css?v=1795188260085" />
 
-    <!-- 构造状态气泡视觉样式 -->
-    <link rel="stylesheet" href="Milvus/construct_bubble.css?v=1787564901794" />
+  <!-- 构造状态气泡视觉样式 -->
+  <link rel="stylesheet" href="Milvus/construct_bubble.css?v=1787564901794" />
 
   <style id="global-notification-banner-styles">
-@keyframes notifCardSlideIn {
-  0% {
-    opacity: 0;
-    transform: translateY(-24px) scale(0.95);
-  }
-  65% {
-    opacity: 1;
-    transform: translateY(3px) scale(1.01);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-@keyframes notifCardSlideOut {
-  0% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-24px) scale(0.95);
-  }
-}
-@keyframes notifTextSlide {
-  0% {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-@keyframes notifAvatarPulse {
-  0% {
-    transform: scale(0.85);
-  }
-  50% {
-    transform: scale(1.1);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-</style>
-  </head>
-  <body>
-    <div id="root"></div>
-    <input
-      type="file"
-      id="global-file-input"
-      accept="image/*"
-      style="display: none"
-    />
-
-
-    <!-- 构造状态气泡核心引擎 (在 app.min.js 前加载) -->
-    <script src="Milvus/construct_bubble_engine.js?v=3.1.0"></script>
-
-    <!-- 府邸捉迷藏/贝叶斯听声辨位游戏引擎 -->
-    <script src="Milvus/hide_seek_engine.js?v=3.3.0"></script>
-
-    <!-- 手账达人/Turn.js 真实物理翻页引擎 -->
-    <script src="Milvus/jquery.min.js"></script>
-    <script src="Milvus/turn.min.js"></script>
-
-    <!-- 傩·观影时光放映室核心引擎 -->
-    <script src="Milvus/cinema_app.js?v=1794301000000"></script>
-    <script src="Milvus/game_vault_app.js?v=1794301000000"></script>
-    <script src="Milvus/radio_app.js?v=1794301000000"></script>
-    <script src="Milvus/study_app.js?v=1794301000000"></script>
-    <script src="Milvus/arcade_app.js?v=1794285000000"></script>
-    <script src="Milvus/academy_app.js?v=1794303000000"></script>
-    <script src="Milvus/browser_app.js?v=1794304000000"></script>
-    <script src="Milvus/chat_report_app.js?v=1795250000000"></script>
-    <script src="Milvus/api_quota_app.js?v=1795260000000"></script>
-    <script src="Milvus/story_loom_app.js?v=1795265000000"></script>
-    <script src="Milvus/ink_poetry_app.js?v=1795270000000"></script>
-    <script src="Milvus/moment_calendar_app.js?v=1795275000000"></script>
-    <script src="Milvus/oc_order_app.js?v=1794470000000"></script>
-    <script src="Milvus/agent_room.js?v=1794299000000"></script>
-    <script src="Milvus/app.min.js?v=1795188260085"></script>
-
-    <!-- 灵犀生境情境视觉引擎 (必须在 app.min.js 之后加载，确保 document.body 已就绪) -->
-    <script src="Milvus/live_reaction_engine.js?v=1795188260085"></script>
-
-    <!-- PWA Service Worker 注册 -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js')
-            .then((registration) => {
-              console.log('[PWA] Service Worker 注册成功，Scope:', registration.scope);
-            })
-            .catch((error) => {
-              console.warn('[PWA] Service Worker 注册失败:', error);
-            });
-        });
+    @keyframes notifCardSlideIn {
+      0% {
+        opacity: 0;
+        transform: translateY(-24px) scale(0.95);
       }
-    </script>
-  </body>
+
+      65% {
+        opacity: 1;
+        transform: translateY(3px) scale(1.01);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes notifCardSlideOut {
+      0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+
+      100% {
+        opacity: 0;
+        transform: translateY(-24px) scale(0.95);
+      }
+    }
+
+    @keyframes notifTextSlide {
+      0% {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes notifAvatarPulse {
+      0% {
+        transform: scale(0.85);
+      }
+
+      50% {
+        transform: scale(1.1);
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="root"></div>
+  <input type="file" id="global-file-input" accept="image/*" style="display: none" />
+
+
+  <!-- 构造状态气泡核心引擎 (在 app.min.js 前加载) -->
+  <script src="Milvus/construct_bubble_engine.js?v=3.1.0"></script>
+
+  <!-- 府邸捉迷藏/贝叶斯听声辨位游戏引擎 -->
+  <script src="Milvus/hide_seek_engine.js?v=3.3.0"></script>
+
+  <!-- 手账达人/Turn.js 真实物理翻页引擎 -->
+  <script src="Milvus/jquery.min.js"></script>
+  <script src="Milvus/turn.min.js"></script>
+
+  <!-- 傩·观影时光放映室核心引擎 -->
+  <script src="Milvus/cinema_app.js?v=1794301000000"></script>
+  <script src="Milvus/game_vault_app.js?v=1794301000000"></script>
+  <script src="Milvus/radio_app.js?v=1794301000000"></script>
+  <script src="Milvus/study_app.js?v=1794301000000"></script>
+  <script src="Milvus/arcade_app.js?v=1794285000000"></script>
+  <script src="Milvus/academy_app.js?v=1794303000000"></script>
+  <script src="Milvus/browser_app.js?v=1794304000000"></script>
+  <script src="Milvus/chat_report_app.js?v=1795250000000"></script>
+  <script src="Milvus/api_quota_app.js?v=1795260000000"></script>
+  <script src="Milvus/story_loom_app.js?v=1795265000000"></script>
+  <script src="Milvus/ink_poetry_app.js?v=1795270000000"></script>
+  <script src="Milvus/moment_calendar_app.js?v=1795275000000"></script>
+  <script src="Milvus/forum_share_app.js?v=1795320000000"></script>
+  <script src="Milvus/forum_batch_reply_app.js?v=1795325000000"></script>
+  <script src="Milvus/proxy_pay_app.js?v=1795330000000"></script>
+  <script src="Milvus/calendar_enhance_app.js?v=1795335000000"></script>
+  <script src="Milvus/diary_archive_app.js?v=1795340000000"></script>
+  <script src="Milvus/custom_survey_app.js?v=1795345000000"></script>
+  <script src="Milvus/phone_fiction_app.js?v=1795355000000"></script>
+  <script src="Milvus/xiuyi_office_polish_app.js?v=1795360000000"></script>
+  <script src="Milvus/xinglin_doctors_data.js?v=1795370000000"></script>
+  <script src="Milvus/xinglin_clinic_app.js?v=1795370000000"></script>
+  <script src="Milvus/xinglin_clinic_p1.js?v=1795375000000"></script>
+  <script src="Milvus/t12_coshopping_app.js?v=1795380000000"></script>
+  <script src="Milvus/music_synth_beatforge.js?v=1795385000000"></script>
+  <script src="Milvus/music_rhythm_engine.js?v=1795385000000"></script>
+  <script src="Milvus/nuo_observation_data.js?v=1795396000000"></script>
+  <script src="Milvus/nuo_observation_app.js?v=1795390000000"></script>
+  <script src="Milvus/splash_push_app.js?v=1795396000000"></script>
+  <script src="Milvus/oc_order_app.js?v=1794470000000"></script>
+  <script src="Milvus/agent_room.js?v=1794299000000"></script>
+  <script src="Milvus/app.min.js?v=1795188260085"></script>
+
+  <!-- 灵犀生境情境视觉引擎 (必须在 app.min.js 之后加载，确保 document.body 已就绪) -->
+  <script src="Milvus/live_reaction_engine.js?v=1795188260085"></script>
+
+  <!-- PWA Service Worker 注册 -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then((registration) => {
+            console.log('[PWA] Service Worker 注册成功，Scope:', registration.scope);
+          })
+          .catch((error) => {
+            console.warn('[PWA] Service Worker 注册失败:', error);
+          });
+      });
+    }
+  </script>
+</body>
+
 </html>

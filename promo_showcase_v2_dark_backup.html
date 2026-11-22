@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>鸢小手机 · 9:16 宣传片样机舞台 v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;900&family=Noto+Sans+SC:wght@400;500;700&family=Newsreader:ital,wght@0,500;0,600;1,400&family=Zhi+Mang+Xing&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --ink:#14110f; --ink2:#1d1916; --paper:#f4ede0; --paper2:#fbf7ef; --paper3:#e9dfcb;
+  --gold:#c8a566; --gold2:#e6cf9c; --seal:#a8342b; --celadon:#6b7a63; --celadon2:#a9b8a0;
+  --blush:#d9a7a0; --text:#2b2622; --muted:#8a7f72;
+  --serif:"Noto Serif SC","Songti SC","STSong",serif; --sans:"Noto Sans SC",-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:#0b0a09;color:var(--paper);font-family:var(--sans);overflow:hidden;user-select:none;
+  display:flex;align-items:center;justify-content:center}
+
+/* ============ 固定设计尺寸 540x960，整体缩放适配 ============ */
+#scaler{position:relative;width:540px;height:960px;transform-origin:center center;flex-shrink:0}
+#stage{position:absolute;inset:0;overflow:hidden;border-radius:22px;
+  background:
+    radial-gradient(120% 60% at 50% 0%,rgba(200,165,102,.16),transparent 60%),
+    radial-gradient(90% 50% at 10% 100%,rgba(168,52,43,.16),transparent 65%),
+    linear-gradient(180deg,#1b1714 0%,#100d0b 100%);
+  background-size:cover;background-position:center;
+  box-shadow:0 30px 90px rgba(0,0,0,.7),0 0 0 1px rgba(230,207,156,.14)}
+body.record-mode #stage{border-radius:0;box-shadow:none}
+
+/* 宣纸颗粒 + 远山剪影 */
+.grain{position:absolute;inset:0;opacity:.07;mix-blend-mode:screen;pointer-events:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>")}
+.mountains{position:absolute;left:0;right:0;bottom:0;height:300px;pointer-events:none;opacity:.5}
+.mountains i{position:absolute;left:-10%;right:-10%;bottom:0;border-radius:50% 50% 0 0/100% 100% 0 0}
+.mountains i:nth-child(1){height:230px;background:linear-gradient(180deg,rgba(107,122,99,.20),transparent);left:-30%;right:30%}
+.mountains i:nth-child(2){height:170px;background:linear-gradient(180deg,rgba(107,122,99,.26),transparent);left:20%;right:-35%}
+.mountains i:nth-child(3){height:110px;background:linear-gradient(180deg,rgba(200,165,102,.18),transparent)}
+
+/* 顶部镜头字幕 */
+.caption{position:absolute;top:44px;left:40px;right:40px;z-index:30;pointer-events:none;
+  display:flex;gap:18px;align-items:flex-start}
+.cap-index{font-family:"Newsreader",serif;font-style:italic;font-size:64px;line-height:.9;color:var(--gold);
+  opacity:.9;min-width:78px;letter-spacing:-.02em}
+.cap-body{flex:1;padding-top:4px}
+.cap-tag{font-size:11px;letter-spacing:.38em;color:var(--gold2);opacity:.85;margin-bottom:10px;display:flex;align-items:center;gap:10px}
+.cap-tag::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(230,207,156,.5),transparent)}
+.cap-title{font-family:var(--serif);font-weight:900;font-size:27px;line-height:1.4;color:var(--paper2);
+  letter-spacing:.04em;text-shadow:0 4px 24px rgba(0,0,0,.6)}
+.cap-sub{margin-top:9px;font-size:12px;letter-spacing:.14em;color:rgba(244,237,224,.62)}
+.cap-anim{animation:capIn .8s cubic-bezier(.2,.8,.2,1) both}
+@keyframes capIn{from{opacity:0;transform:translateY(14px);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
+
+/* 印章 */
+.seal{position:absolute;right:34px;bottom:38px;width:44px;height:44px;border-radius:8px;z-index:30;
+  background:var(--seal);color:#f7e7d4;font-family:var(--serif);font-weight:900;font-size:22px;
+  display:flex;align-items:center;justify-content:center;transform:rotate(-6deg);
+  box-shadow:inset 0 0 0 2px rgba(247,231,212,.35),0 6px 18px rgba(168,52,43,.4);opacity:.92}
+.brand{position:absolute;left:40px;bottom:46px;z-index:30;font-size:10px;letter-spacing:.42em;color:rgba(244,237,224,.45)}
+.brand b{display:block;font-family:"Newsreader",serif;font-size:15px;font-style:italic;letter-spacing:.2em;color:var(--gold2);font-weight:500;margin-bottom:3px}
+
+/* 进度分段 */
+.progress{position:absolute;left:40px;right:40px;bottom:26px;z-index:30;display:flex;gap:5px;height:2px}
+.progress .seg{flex:1;background:rgba(244,237,224,.14);border-radius:2px;overflow:hidden}
+.progress .seg i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--gold),var(--gold2))}
+
+/* ============ 手机样机 ============ */
+.phone{position:absolute;left:50%;top:212px;width:322px;height:672px;margin-left:-161px;border-radius:46px;padding:9px;z-index:10;
+  background:linear-gradient(145deg,#4a4540 0%,#1a1816 40%,#2c2723 100%);
+  box-shadow:0 40px 80px rgba(0,0,0,.7),0 0 0 1px rgba(230,207,156,.25),inset 0 0 0 1.5px rgba(255,255,255,.12),
+    0 0 90px rgba(200,165,102,.12);
+  transition:transform 1.1s cubic-bezier(.22,1,.36,1)}
+.phone.p-tilt{transform:perspective(1100px) rotateY(-9deg) rotateX(3deg) scale(.97)}
+.phone.p-tilt2{transform:perspective(1100px) rotateY(7deg) rotateX(2deg) scale(.98)}
+.phone.p-far{transform:scale(.92) translateY(6px)}
+.phone::before{content:"";position:absolute;right:-3px;top:130px;width:3px;height:56px;border-radius:2px;background:#3a3631}
+.screen{position:relative;width:100%;height:100%;border-radius:37px;overflow:hidden;background:var(--paper2);color:var(--text)}
+.island{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:84px;height:24px;border-radius:99px;background:#0b0a09;z-index:60}
+.statusbar{position:absolute;top:12px;left:26px;right:26px;display:flex;justify-content:space-between;font-size:11px;font-weight:600;z-index:55;pointer-events:none}
+.layer{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .6s ease,transform .8s cubic-bezier(.22,1,.36,1);transform:scale(1.03)}
+.layer.on{opacity:1;transform:none}
+
+/* 通用入场 / 区间 */
+[data-at]{opacity:0;transform:translateY(14px) scale(.97);transition:opacity .5s ease,transform .6s cubic-bezier(.22,1,.36,1)}
+[data-at].in{opacity:1;transform:none}
+[data-from]{opacity:0;pointer-events:none;transition:opacity .45s ease,transform .6s cubic-bezier(.22,1,.36,1)}
+[data-from].show{opacity:1;pointer-events:auto}
+
+/* 头像 */
+.av{border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden;
+  background:linear-gradient(135deg,var(--celadon2),var(--celadon));color:#fff;font-family:var(--serif);font-weight:900}
+.av img{width:100%;height:100%;object-fit:cover}
+
+/* ---------- ACT1 序幕 ---------- */
+.a1{background:radial-gradient(80% 60% at 50% 30%,#2a2420 0%,#0e0c0b 80%);color:var(--paper)}
+.a1 .moon{position:absolute;top:128px;left:50%;width:150px;height:150px;margin-left:-75px;border-radius:50%;
+  background:radial-gradient(circle at 38% 36%,rgba(246,226,180,.9),rgba(200,165,102,.28) 55%,transparent 72%);filter:blur(1px);opacity:.55}
+.a1 .time{position:absolute;top:86px;width:100%;text-align:center;font-family:"Newsreader",serif;font-size:72px;font-weight:500;letter-spacing:-.02em}
+.a1 .date{position:absolute;top:176px;width:100%;text-align:center;font-size:12px;letter-spacing:.3em;color:rgba(244,237,224,.6)}
+.notif{position:absolute;left:12px;right:12px;background:rgba(251,247,239,.95);color:var(--text);border-radius:22px;padding:12px 14px;
+  display:flex;gap:11px;align-items:center;box-shadow:0 18px 40px rgba(0,0,0,.45)}
+.notif .nt{flex:1;min-width:0}
+.notif .nh{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);margin-bottom:2px}
+.notif .nh b{color:var(--text);font-size:12px}
+.notif .nb{font-size:12px;line-height:1.5}
+.a1 .hint{position:absolute;bottom:34px;width:100%;text-align:center;font-size:10px;letter-spacing:.4em;color:var(--gold2)}
+
+/* ---------- ACT2 锁屏 ---------- */
+.a2{background:linear-gradient(175deg,#cfd8c9,#a9b8a0 50%,#7d8f76);background-size:cover;background-position:center;transition:opacity .6s,transform .8s}
+.a2 .scrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.18),transparent 40%,rgba(20,17,15,.35))}
+.a2 .ridge{position:absolute;left:0;right:0;bottom:0;height:260px;opacity:.9}
+.a2 .ridge i{position:absolute;bottom:0;border-radius:50% 50% 0 0/100% 100% 0 0}
+.a2 .ridge i:nth-child(1){left:-40%;width:110%;height:190px;background:#6c7d66}
+.a2 .ridge i:nth-child(2){right:-45%;width:120%;height:140px;background:#52634e}
+.a2 .ridge i:nth-child(3){left:-10%;width:130%;height:80px;background:#3a4937}
+.a2.poem{background:linear-gradient(175deg,#f1e6d3,#e3cfae 55%,#c9a77f)}
+.a2.poem .ridge i:nth-child(1){background:#c9aa83}.a2.poem .ridge i:nth-child(2){background:#b58d63}.a2.poem .ridge i:nth-child(3){background:#8c6a47}
+.a2 .clock{position:absolute;top:70px;width:100%;text-align:center;color:#26301f;transition:all .8s}
+.a2 .clock .t{font-family:"Newsreader",serif;font-size:76px;font-weight:500;letter-spacing:-.03em;line-height:1}
+.a2 .clock .d{margin-top:8px;font-size:12px;letter-spacing:.2em}
+.a2.poem .clock{color:#3a2a1a}
+.a2.poem .clock .t{font-family:var(--serif);font-weight:900;font-size:68px;letter-spacing:.02em}
+.vpoem{position:absolute;right:26px;top:210px;writing-mode:vertical-rl;font-family:var(--serif);font-size:15px;letter-spacing:.35em;
+  line-height:2;color:#3a2a1a;height:210px;opacity:0}
+.a2.poem .vpoem{opacity:1;transition:opacity .9s .3s}
+.vpoem small{display:block;font-size:10px;color:var(--seal);letter-spacing:.3em;margin-top:6px}
+.glass{position:absolute;left:18px;right:18px;bottom:96px;border-radius:22px;background:rgba(255,252,247,.46);backdrop-filter:blur(14px);
+  border:1px solid rgba(255,255,255,.6);padding:15px 16px;text-align:center;font-family:var(--serif);font-size:13px;line-height:1.85;color:#2b2622;
+  box-shadow:0 14px 34px rgba(0,0,0,.12)}
+.glass small{display:block;margin-top:6px;font-family:var(--sans);font-size:10px;letter-spacing:.2em;color:#6b5f52}
+.chips{position:absolute;left:14px;right:14px;top:300px;display:flex;flex-wrap:wrap;gap:7px;justify-content:center}
+.chip{font-size:10.5px;padding:5px 11px;border-radius:99px;background:rgba(20,17,15,.62);color:var(--gold2);border:1px solid rgba(230,207,156,.35);backdrop-filter:blur(8px)}
+.swipe{position:absolute;bottom:34px;width:100%;text-align:center;font-size:10px;letter-spacing:.3em;color:#26301f;animation:bob 2s ease-in-out infinite}
+.swipe::before{content:"";display:block;width:110px;height:4px;border-radius:4px;background:rgba(255,255,255,.7);margin:0 auto 10px}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+
+/* ---------- ACT3 聊天 ---------- */
+.a3{background:linear-gradient(180deg,#f3ecdd,#ebe1cd);display:flex;flex-direction:column}
+.chead{padding:44px 16px 10px;display:flex;align-items:center;gap:10px;background:rgba(251,247,239,.9);border-bottom:1px solid rgba(43,38,34,.08);z-index:3}
+.chead b{font-family:var(--serif);font-size:14px}
+.chead small{display:block;font-size:10px;color:var(--celadon)}
+.cbody{flex:1;position:relative;padding:14px 12px;display:flex;flex-direction:column;gap:11px;overflow:hidden}
+.row{display:flex;gap:8px;align-items:flex-end}.row.me{flex-direction:row-reverse}
+.bub{max-width:76%;padding:9px 13px;border-radius:16px;font-size:12px;line-height:1.6;box-shadow:0 3px 10px rgba(43,38,34,.06)}
+.bub.ta{background:#fffdf8;border-bottom-left-radius:4px}
+.bub.me{background:linear-gradient(135deg,#6b7a63,#55654d);color:#fff;border-bottom-right-radius:4px}
+.typing{display:flex;gap:4px;padding:11px 14px;background:#fffdf8;border-radius:16px;border-bottom-left-radius:4px;width:fit-content}
+.typing i{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:dot 1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes dot{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
+.sticker{width:132px;border-radius:16px;padding:10px;text-align:center;background:#fffdf8;border:1.5px solid rgba(168,52,43,.22);
+  box-shadow:0 10px 22px rgba(43,38,34,.1);transform:rotate(-2deg)}
+.sticker .e{font-size:42px;line-height:1.1}
+.sticker .c{margin-top:5px;font-size:10.5px;font-weight:700;color:var(--seal)}
+.cstate{align-self:center;display:flex;align-items:center;gap:7px;padding:6px 14px;border-radius:99px;font-size:11px;color:#4a3d2a;
+  background:linear-gradient(90deg,rgba(230,207,156,.9),rgba(217,167,160,.75));border:1px solid rgba(255,255,255,.8);
+  box-shadow:0 8px 22px rgba(168,52,43,.18)}
+.cstate::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--seal);animation:pulse 1.4s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(168,52,43,.5)}100%{box-shadow:0 0 0 9px rgba(168,52,43,0)}}
+.petals{position:absolute;inset:0;pointer-events:none;overflow:hidden;opacity:0;transition:opacity 1s}
+.petals.show{opacity:1}
+.petals i{position:absolute;top:-16px;width:10px;height:13px;border-radius:80% 0 80% 0;background:rgba(217,167,160,.85);animation:fall 4.2s linear infinite}
+@keyframes fall{0%{transform:translate(0,-10px) rotate(0)}100%{transform:translate(40px,520px) rotate(260deg);opacity:.1}}
+.glow{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 60px rgba(217,167,160,.0);transition:box-shadow 1.2s}
+.glow.show{box-shadow:inset 0 0 70px rgba(217,167,160,.5)}
+
+/* ---------- ACT4 情侣空间 ---------- */
+.a4{background:linear-gradient(180deg,#f7f0e2,#efe5d1);padding:44px 14px 14px;display:flex;flex-direction:column;gap:10px}
+.hcard{border-radius:20px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;
+  background:linear-gradient(135deg,#2b2622,#3b322b);color:var(--paper);box-shadow:0 12px 26px rgba(43,38,34,.25)}
+.hcard .pair{display:flex;align-items:center}.hcard .pair .av{border:2px solid #3b322b}.hcard .pair .av+.av{margin-left:-10px}
+.hcard .st{text-align:right}.hcard .st b{font-family:var(--serif);font-size:20px;color:var(--gold2)}
+.hcard .st small{display:block;font-size:10px;letter-spacing:.12em;color:rgba(244,237,224,.6)}
+.hcard .tag{display:inline-block;margin-bottom:2px;font-size:10px;padding:2px 8px;border-radius:99px;background:rgba(168,52,43,.85);color:#fbe9d6}
+.tabs{display:flex;gap:6px}
+.tab{flex:1;text-align:center;font-size:10.5px;padding:7px 0;border-radius:99px;background:rgba(43,38,34,.06);color:var(--muted);transition:all .4s}
+.tab.on{background:var(--seal);color:#fbe9d6;font-weight:700;box-shadow:0 6px 14px rgba(168,52,43,.3)}
+.panels{position:relative;flex:1}
+.panel{position:absolute;inset:0;border-radius:20px;background:#fffdf8;border:1px solid rgba(43,38,34,.07);padding:14px;box-shadow:0 10px 24px rgba(43,38,34,.07);
+  display:flex;flex-direction:column;gap:10px}
+.panel h4{font-family:var(--serif);font-size:14px}
+.panel small{font-size:10.5px;color:var(--muted);line-height:1.6}
+.g8{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:2px}
+.gi{text-align:center;font-size:10px}
+.gi i{display:flex;width:100%;aspect-ratio:1;border-radius:16px;align-items:center;justify-content:center;font-style:normal;font-size:22px;margin-bottom:5px;
+  background:linear-gradient(145deg,var(--paper),var(--paper3));border:1px solid rgba(43,38,34,.07)}
+.book{position:relative;flex:1;display:flex;perspective:900px;border-radius:12px;background:#e6d8bd;padding:8px;box-shadow:inset 0 0 18px rgba(0,0,0,.12)}
+.pg{flex:1;background:#fffaf0;padding:12px 10px;font-size:10.5px;line-height:1.75;border:1px solid rgba(0,0,0,.05);position:relative;overflow:hidden}
+.pg.l{border-radius:6px 0 0 6px;box-shadow:inset -10px 0 14px -10px rgba(0,0,0,.2)}
+.pg.r{border-radius:0 6px 6px 0;box-shadow:inset 10px 0 14px -10px rgba(0,0,0,.2);transform-origin:left center}
+.pg b{font-family:var(--serif);color:var(--seal)}
+.stk{position:absolute;right:8px;bottom:8px;font-size:28px;transform:rotate(12deg)}
+.flip{animation:flip 1.6s ease-in-out infinite}
+@keyframes flip{0%,30%{transform:rotateY(0)}60%,100%{transform:rotateY(-160deg);opacity:.2}}
+.rooms{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.rm{border-radius:12px;padding:10px 6px;text-align:center;font-size:10.5px;background:var(--paper);border:1px solid rgba(43,38,34,.07);position:relative;overflow:hidden}
+.rm.hot{background:linear-gradient(145deg,#f3d3ce,#e7b0a8);border-color:var(--seal);font-weight:700}
+.rm em{display:block;font-style:normal;font-family:"Newsreader",serif;font-size:16px;color:var(--seal);margin-top:2px}
+.bar{height:6px;border-radius:6px;background:rgba(43,38,34,.08);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--gold),var(--seal));width:0;transition:width 1.4s cubic-bezier(.2,.8,.2,1)}
+.bar.go i{width:var(--w)}
+.verse{font-family:var(--serif);font-size:15px;line-height:1.9;letter-spacing:.12em;padding:10px 12px;border-radius:12px;background:var(--paper)}
+.verse.ta{background:linear-gradient(135deg,#e6edde,#d4dfc9)}
+.score{display:flex;justify-content:space-between;font-size:11px}
+.score b{color:var(--seal);font-family:"Newsreader",serif;font-size:15px}
+
+/* ---------- 太疾驰 / 绣衣楼 / 休闲一刻 通用组件 ---------- */
+.pk{display:flex;gap:8px}
+.pk .cd{position:relative;flex:1;height:96px;border-radius:14px;text-align:center;font-family:var(--serif);font-size:12px;line-height:1.5;
+  display:flex;align-items:center;justify-content:center;color:#fbe3c3;background:linear-gradient(160deg,#c0392b,#8f2a20);box-shadow:0 8px 16px rgba(143,42,32,.3);overflow:hidden}
+.pk .cd .rs{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#fff7e6,#f1e1bd);color:#7a2a20;font-weight:900}
+.item{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:12px;background:var(--paper);font-size:11px;line-height:1.5}
+.item i{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-style:normal;font-size:22px;background:linear-gradient(145deg,#fff,var(--paper3));flex-shrink:0}
+.item b{font-family:var(--serif);font-size:12px}
+.item .px{margin-left:auto;font-family:"Newsreader",serif;font-size:15px;color:var(--seal)}
+.badge{font-size:9px;padding:1px 7px;border-radius:99px;margin-left:5px;vertical-align:1px}
+.badge.gold{background:linear-gradient(90deg,var(--gold2),var(--gold));color:#4a3512}
+.badge.g{background:#dde6d1;color:#3a4a33}
+.cps{display:flex;gap:5px;flex-wrap:wrap}
+.cps span{font-size:10px;padding:3px 9px;border-radius:99px;background:var(--paper);border:1px solid rgba(43,38,34,.08)}
+.cps span.on{background:var(--seal);color:#fbe9d6;border-color:var(--seal)}
+.btnrow{display:flex;gap:8px}
+.btnrow span{flex:1;text-align:center;font-size:11px;padding:8px 0;border-radius:99px;background:var(--paper);border:1px solid rgba(43,38,34,.1)}
+.btnrow span.pri{background:var(--seal);color:#fbe9d6;border-color:var(--seal);font-weight:700}
+.tabbar{display:flex;justify-content:space-around;padding:10px 0 2px;margin-top:auto;font-size:10.5px;color:#2c3727}
+.tabbar span{padding:5px 14px;border-radius:99px;background:rgba(255,255,255,.4)}
+.news{border-radius:16px;padding:11px 14px;background:rgba(20,17,15,.85);color:var(--paper);font-size:11px;line-height:1.6;border:1px solid rgba(230,207,156,.3)}
+.news b{color:var(--gold2);font-family:var(--serif)}
+
+/* ---------- ACT5 桌面生态 ---------- */
+.a5{background:linear-gradient(175deg,#e3ead9,#b9c7ae 55%,#8b9d83);padding:50px 18px 18px;display:flex;flex-direction:column}
+.a5 .ws{text-align:center;font-family:var(--serif);font-weight:900;color:#2c3727;font-size:15px;letter-spacing:.15em}
+.a5 .ws small{display:block;font-family:var(--sans);font-weight:400;font-size:10px;letter-spacing:.2em;margin-top:3px;opacity:.7}
+.dock{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 8px;margin-top:14px}
+.app{text-align:center;font-size:10px;color:#2c3727;transition:transform .6s cubic-bezier(.2,.8,.2,1)}
+.app i{display:flex;margin:0 auto 5px;width:50px;height:50px;border-radius:15px;align-items:center;justify-content:center;font-style:normal;font-size:26px;
+  box-shadow:0 8px 16px rgba(0,0,0,.22),inset 0 0 0 1px rgba(255,255,255,.4);transition:all .5s}
+.app.hl{transform:translateY(-6px) scale(1.14)}
+.app.hl i{box-shadow:0 0 0 3px var(--gold),0 0 0 7px rgba(230,207,156,.35),0 14px 26px rgba(0,0,0,.3)}
+.app.dim{opacity:.55}
+.callout{position:absolute;left:14px;right:14px;bottom:20px;border-radius:22px;padding:14px 16px;background:rgba(20,17,15,.88);color:var(--paper);
+  backdrop-filter:blur(14px);box-shadow:0 18px 36px rgba(0,0,0,.4);border:1px solid rgba(230,207,156,.3)}
+.callout b{font-family:var(--serif);font-size:15px;color:var(--gold2);display:block;margin-bottom:5px}
+.callout span{font-size:11.5px;line-height:1.6;color:rgba(244,237,224,.8)}
+.cwrap{position:absolute;left:14px;right:14px;bottom:20px;height:96px}
+.cwrap .callout{inset:0;left:0;right:0;bottom:auto;height:100%;position:absolute}
+.room{margin-top:16px;border-radius:18px;padding:12px;background:rgba(251,247,239,.55);backdrop-filter:blur(8px);font-size:11px;display:flex;align-items:center;gap:10px;color:#2c3727;border:1px solid rgba(255,255,255,.6)}
+
+/* ---------- ACT6 收尾 ---------- */
+.a6{background:radial-gradient(80% 55% at 50% 38%,#2a2420,#0d0b0a 85%);color:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:30px}
+.logo{width:92px;height:92px;border-radius:26px;display:flex;align-items:center;justify-content:center;overflow:hidden;
+  background:linear-gradient(145deg,var(--gold2),var(--gold) 55%,#8c6a30);color:#2a1d0c;font-family:var(--serif);font-weight:900;font-size:50px;
+  box-shadow:0 18px 44px rgba(200,165,102,.35),inset 0 0 0 2px rgba(255,255,255,.35)}
+.a6 h2{font-family:var(--serif);font-weight:900;font-size:26px;letter-spacing:.3em;padding-left:.3em}
+.a6 .en{font-family:"Newsreader",serif;font-style:italic;font-size:15px;color:var(--gold2);letter-spacing:.3em}
+.a6 .pwa{font-size:11px;padding:6px 15px;border-radius:99px;border:1px solid rgba(230,207,156,.4);color:var(--gold2);background:rgba(255,255,255,.04)}
+.a6 p{font-family:var(--serif);font-size:14px;line-height:2;letter-spacing:.12em;color:rgba(244,237,224,.88)}
+.a6 .disc{position:absolute;left:22px;right:22px;bottom:26px;font-size:9px;line-height:1.7;color:rgba(244,237,224,.4)}
+
+/* ============ 导演栏 ============ */
+.bar-dir{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:100;display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;
+  padding:8px 12px;border-radius:16px;background:rgba(20,17,15,.9);border:1px solid rgba(230,207,156,.22);backdrop-filter:blur(14px);box-shadow:0 14px 34px rgba(0,0,0,.5);
+  max-width:96vw;transition:opacity .3s,transform .3s}
+body.record-mode .bar-dir,body.record-mode .hintkeys{opacity:0;pointer-events:none}
+.btn{background:rgba(255,255,255,.08);color:var(--paper);border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:5px 11px;font-size:12px;cursor:pointer;font-family:var(--sans)}
+.btn:hover{background:rgba(255,255,255,.18)}
+.btn.pri{background:var(--seal);border-color:#d36b5f}
+.btn.pill{font-size:11px;padding:4px 9px;opacity:.65}.btn.pill.on{opacity:1;background:rgba(200,165,102,.28);border-color:var(--gold)}
+.tc{font-variant-numeric:tabular-nums;font-size:12px;color:var(--gold2);min-width:84px;text-align:center}
+.hintkeys{position:fixed;top:10px;right:14px;font-size:11px;color:rgba(255,255,255,.4);z-index:100}
+</style>
+</head>
+<body>
+<div class="hintkeys">空格 播放/暂停 ｜ ← → 切幕 ｜ H 纯净录屏</div>
+
+<div id="scaler">
+<div id="stage">
+  <div class="grain"></div>
+  <div class="mountains"><i></i><i></i><i></i></div>
+
+  <!-- 镜头字幕 -->
+  <div class="caption">
+    <div class="cap-index" id="cap-index">01</div>
+    <div class="cap-body">
+      <div class="cap-tag" id="cap-tag">序幕</div>
+      <div class="cap-title" id="cap-title"></div>
+      <div class="cap-sub" id="cap-sub"></div>
+    </div>
+  </div>
+
+  <!-- 手机 -->
+  <div class="phone p-tilt" id="phone">
+    <div class="screen">
+      <div class="island"></div>
+
+      <!-- ACT1 -->
+      <div class="layer a1 on" data-act="0">
+        <div class="moon"></div>
+        <div class="time">21:18</div>
+        <div class="date">十一月十九 · 星期四 · 冬月</div>
+        <div class="notif" style="top:262px" data-at="0.6">
+          <div class="av" data-asset="yuanji_avatar" style="width:42px;height:42px;font-size:20px">基</div>
+          <div class="nt"><div class="nh"><b>袁基</b><span>刚刚</span></div><div class="nb">殿下今日批完公文了吗？桌上的茶，可还温着。</div></div>
+        </div>
+        <div class="notif" style="top:344px" data-at="2.6">
+          <div class="av" data-asset="yuanji_avatar" style="width:42px;height:42px;font-size:20px">基</div>
+          <div class="nt"><div class="nh"><b>袁基</b><span>刚刚</span></div><div class="nb">……不回也无妨，袁某等着便是。🍵</div></div>
+        </div>
+        <div class="hint" data-at="4.5">M I L V U S · P H O N E</div>
+      </div>
+
+      <!-- ACT2 -->
+      <div class="layer a2" id="a2" data-act="1">
+        <div class="scrim"></div>
+        <div class="ridge"><i></i><i></i><i></i></div>
+        <div class="clock"><div class="t">09:42</div><div class="d">11月19日 星期四 · 十月初十</div></div>
+        <div class="vpoem">世事如棋，唯与殿下对弈，袁某甘愿落子迟些<small>袁基 · 手书</small></div>
+        <div class="chips">
+          <span class="chip" data-at="1.2">字体风格</span><span class="chip" data-at="1.7">文字阴影</span>
+          <span class="chip" data-at="2.2">时钟位置</span><span class="chip" data-at="2.7">诗签展台</span>
+          <span class="chip" data-at="3.2">一键预设</span>
+        </div>
+        <div class="glass" data-at="5.2">“茶凉了可以再煮，<br/>殿下的话，袁某只听一遍就够了。”<small>—— 锁屏文字展台 · 可自定义 ——</small></div>
+        <div class="swipe">向上滑动 · 进入桌面</div>
+      </div>
+
+      <!-- ACT3 -->
+      <div class="layer a3" data-act="2">
+        <div class="chead">
+          <div class="av" data-asset="yuanji_avatar" style="width:32px;height:32px;font-size:15px">基</div>
+          <div><b>袁基</b><small>● 在线 · 正在品茗</small></div>
+          <span style="margin-left:auto;color:var(--muted)">···</span>
+        </div>
+        <div class="cbody">
+          <div class="row me" data-at="0.4"><div class="bub me">今天好累，不想批奏折了……</div></div>
+          <div class="row" data-from="1.2" data-to="2.4" style="position:absolute;left:12px;top:70px"><div class="typing"><i></i><i></i><i></i></div></div>
+          <div class="row" data-at="2.4"><div class="av" data-asset="yuanji_avatar" style="width:26px;height:26px;font-size:12px">基</div><div class="bub ta">那便不批了。殿下且过来歇着，余下的交给袁某便是。</div></div>
+          <div class="row" data-at="4.2"><div class="av" data-asset="yuanji_avatar" style="width:26px;height:26px;font-size:12px">基</div>
+            <div class="sticker" id="sticker-slot"><div class="e">🍵😌</div><div class="c">[递茶 · 微笑但腹黑]</div></div></div>
+          <div class="cstate" data-at="6.0">构造状态 · 正在偷偷看你，唇角微扬</div>
+          <div class="row me" data-at="8.2"><div class="bub me">这茶里不会又放了什么奇怪的东西吧？</div></div>
+          <div class="row" data-at="10.2"><div class="av" data-asset="yuanji_avatar" style="width:26px;height:26px;font-size:12px">基</div><div class="bub ta">殿下多虑了，不过是几片春茶，与一点私心罢了。</div></div>
+          <div class="petals" id="petals"><i style="left:10%"></i><i style="left:30%;animation-delay:1.2s"></i><i style="left:52%;animation-delay:.5s"></i><i style="left:70%;animation-delay:2s"></i><i style="left:88%;animation-delay:.9s"></i></div>
+          <div class="glow" id="glow"></div>
+        </div>
+      </div>
+
+      <!-- ACT4 -->
+      <div class="layer a4" data-act="3">
+        <div class="hcard">
+          <div class="pair">
+            <div class="av" data-asset="user_avatar" style="width:40px;height:40px;font-size:16px;background:linear-gradient(135deg,var(--blush),#b9786f)">我</div>
+            <div class="av" data-asset="yuanji_avatar" style="width:40px;height:40px;font-size:18px">基</div>
+          </div>
+          <div class="st"><span class="tag">相思暗涌</span><br/><b>128</b><small>相伴天数 · 情侣空间</small></div>
+        </div>
+        <div class="tabs">
+          <div class="tab on" data-from="0" data-to="4.4" data-tab>日常</div>
+          <div class="tab" data-from="4.4" data-to="8.8" data-tab>手账</div>
+          <div class="tab" data-from="8.8" data-to="12.8" data-tab>捉迷藏</div>
+          <div class="tab" data-from="12.8" data-to="17" data-tab>飞花令</div>
+        </div>
+        <div class="panels">
+          <div class="panel" data-from="0" data-to="4.4">
+            <h4>第一页 · 八宫格</h4>
+            <div class="g8">
+              <div class="gi" data-at="0.3"><i>🫖</i>与你相伴</div><div class="gi" data-at="0.5"><i>🗂️</i>任务拆解</div>
+              <div class="gi" data-at="0.7"><i>🪙</i>共同记账</div><div class="gi" data-at="0.9"><i>⭐</i>愿望清单</div>
+              <div class="gi" data-at="1.1"><i>❓</i>我问你猜</div><div class="gi" data-at="1.3"><i>🖌️</i>我画你猜</div>
+              <div class="gi" data-at="1.5"><i>🪷</i>飞花传令</div><div class="gi" data-at="1.7"><i>🍲</i>旧日食谱</div>
+            </div>
+            <small data-at="2.4">第二页还有：府邸捉迷藏 · 手账达人 · 风月传说</small>
+          </div>
+          <div class="panel" data-from="4.4" data-to="8.8">
+            <h4>手账达人 · 14 页物理翻页</h4>
+            <div class="book">
+              <div class="pg l"><b>Nov.19 夜雨</b><br/>与袁公子共弈三局，皆险胜半子。<br/><br/>他说：“下回，不许悔棋。”<span class="stk">🍵</span></div>
+              <div class="pg r flip"><b>批注</b><br/>“殿下的字，比上回工整了些。”<br/><br/><span style="color:var(--muted)">— 画笔 · 贴纸 · AI 写手账 —</span></div>
+            </div>
+            <small>基于 turn.js 的真实翻页，封面与每页都能自己装饰</small>
+          </div>
+          <div class="panel" data-from="8.8" data-to="12.8">
+            <h4>府邸捉迷藏 · 听声辨位</h4>
+            <div class="rooms">
+              <div class="rm">书阁<em>12%</em></div><div class="rm hot">竹林<em>71%</em></div><div class="rm">茶室<em>9%</em></div>
+              <div class="rm">回廊<em>5%</em></div><div class="rm">花厅<em>2%</em></div><div class="rm">后院<em>1%</em></div>
+            </div>
+            <div class="bar" data-bar><i style="--w:71%"></i></div>
+            <small>「竹叶沙沙……似有脚步声。」贝叶斯推理实时更新藏身概率，战绩可写入手账。</small>
+          </div>
+          <div class="panel" data-from="12.8" data-to="17">
+            <h4>飞花传令 · 令字【春】</h4>
+            <div class="verse">春风又绿江南岸</div>
+            <div class="verse ta" data-at="13.8">春色满园关不住<br/><small style="letter-spacing:.1em">—— 袁基接令</small></div>
+            <div class="score"><span>雅兴值</span><b>+10</b></div>
+            <small>另有 我画你猜 · 风月传说 · 旧日食谱 等玩法</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACT5 太疾驰 -->
+      <div class="layer a4" data-act="4">
+        <div class="hcard">
+          <div><b style="font-family:var(--serif);font-size:19px;color:var(--gold2)">⚡ 太疾驰</b><br/><small style="font-size:10px;letter-spacing:.1em;color:rgba(244,237,224,.6)">广陵极速跑腿外送 · 同城奇珍订购</small></div>
+          <div class="st"><span class="tag">福券卡包 3</span><br/><b>1,288</b><small>五铢钱</small></div>
+        </div>
+        <div class="tabs">
+          <div class="tab" data-from="0" data-to="3.6">红包</div>
+          <div class="tab" data-from="3.6" data-to="7.4">二手</div>
+          <div class="tab" data-from="7.4" data-to="11.2">餐饮</div>
+          <div class="tab" data-from="11.2" data-to="14.2">购物</div>
+          <div class="tab" data-from="14.2" data-to="16.8">抢票</div>
+          <div class="tab" data-from="16.8" data-to="20">结算</div>
+        </div>
+        <div class="panels">
+          <div class="panel" data-from="0" data-to="3.6">
+            <h4>每日财神红包 · 三选一锦囊</h4>
+            <div class="pk">
+              <div class="cd">🧧<br/>锦囊<div class="rs" data-at="1.3">五铢钱<br/>+88</div></div>
+              <div class="cd">🧧<br/>锦囊<div class="rs" data-at="1.6">满100减30<br/>食券</div></div>
+              <div class="cd">🧧<br/>锦囊<div class="rs" data-at="1.9">神砍一刀<br/>券 ×1</div></div>
+            </div>
+            <small>必得五铢钱，另有满减券、神砍一刀券；还有名士手气榜，看谁压过谁。</small>
+          </div>
+          <div class="panel" data-from="3.6" data-to="7.4">
+            <h4>二手 · 淘兵刃车马</h4>
+            <div class="cps"><span class="on">日用</span><span>兵器</span><span>车马</span><span>田屋</span><span>文墨</span><span>高奢</span></div>
+            <div class="item" data-at="4.0"><i>🐎</i><div><b>赤兔旧鞍</b><span class="badge gold">名士亲售</span><br/><span style="color:var(--muted)">成色 九成新</span></div><span class="px">320</span></div>
+            <div class="item" data-at="4.4"><i>🗡️</i><div><b>青釭剑鞘</b><span class="badge g">八成新</span><br/><span style="color:var(--muted)">神砍一刀券 · 立打八折</span></div><span class="px">188</span></div>
+            <div class="item" data-at="5.2"><i>📦</i><div><b>上架拍卖 · 吆喝一声</b><br/><span style="color:var(--muted)">背包吃灰物件挂出去，摇名士来出价</span></div></div>
+          </div>
+          <div class="panel" data-from="7.4" data-to="11.2">
+            <h4>餐饮 · 外卖点菜</h4>
+            <div class="item" data-at="7.7" style="border-radius:99px"><span>🔍 搜店名 / 菜名</span><span style="margin-left:auto">⚙️ ✨</span></div>
+            <div class="cps"><span class="on">米食</span><span>面食</span><span>肉食</span><span>轻食</span><span>甜品</span><span>饮品</span></div>
+            <div class="item" data-at="8.2"><i>🍖</i><div><b>醉仙楼 · 招牌烤肉</b><span class="badge gold">满100减30</span><br/><span style="color:var(--muted)">主理人亲荐 · 评分 4.8</span></div></div>
+            <div class="item" data-at="9.0" style="background:#e6edde"><i>💬</i><div><b>食客评价</b><br/><span style="color:var(--muted)">“烤肉管够，吃得痛快！”</span></div></div>
+            <small data-at="9.8">点 ✨ 让名士满城搜罗新开张的馆子，图片由 AI 生成。</small>
+          </div>
+          <div class="panel" data-from="11.2" data-to="14.2">
+            <h4>购物 · 置办行头</h4>
+            <div class="g8" style="grid-template-columns:repeat(3,1fr)">
+              <div class="gi" data-at="11.5"><i>🧥</i>锦氅</div><div class="gi" data-at="11.7"><i>⚔️</i>兵器</div><div class="gi" data-at="11.9"><i>🎪</i>杂耍玩意</div>
+              <div class="gi" data-at="12.1"><i>🏺</i>日常好物</div><div class="gi" data-at="12.3"><i>💎</i>珍宝</div><div class="gi" data-at="12.5"><i>🎁</i>节日礼</div>
+            </div>
+            <small data-at="13">加进结算单；快递骑手送到后入背包，还能转送传讯里的名士。</small>
+          </div>
+          <div class="panel" data-from="14.2" data-to="16.8">
+            <h4>抢票 · 戏楼听曲</h4>
+            <div class="item" data-at="14.5"><i>🎭</i><div><b>《霸王别姬》 · 听雨戏楼</b><br/><span style="color:var(--muted)">今晚 19:30 · 雅座余 12</span></div></div>
+            <div class="btnrow" data-at="15.1"><span class="pri">立即锁座</span><span>邀请名士同去</span></div>
+            <small data-at="15.8">锁座后自动写进桌面日历，到点提醒。</small>
+          </div>
+          <div class="panel" data-from="16.8" data-to="20">
+            <h4>结算单 · 一键勾选</h4>
+            <div class="item" data-at="17.1"><span>☑</span><div><b>二手 · 赤兔旧鞍 + 外卖 + 戏票</b><br/><span style="color:var(--muted)">福券已减 30</span></div><span class="px">508</span></div>
+            <div class="btnrow" data-at="17.5"><span class="pri">自己支付</span><span>他人代付</span></div>
+            <div class="bar" data-bar><i style="--w:86%"></i></div>
+            <small data-at="18.2">🐎 骑手纵马飞驰，可催单；签收后入背包，一键「🎁 送给TA」。</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACT6 绣衣楼 -->
+      <div class="layer a5" data-act="5">
+        <div class="ws">绣衣楼 · 楼主办公重地<small>案牍情报与内务总览</small></div>
+        <div class="dock" style="grid-template-columns:repeat(3,1fr);gap:14px 6px">
+          <div class="app" data-at="0.4"><i style="background:linear-gradient(145deg,#a8c8ba,#6f8f81)">📋</i>绣衣问卷</div>
+          <div class="app" data-at="0.7"><i style="background:linear-gradient(145deg,#e8c3a8,#b98a6d)">⏰</i>假勤</div>
+          <div class="app" data-at="1.0"><i style="background:linear-gradient(145deg,#e6b89c,#b9785a)">✅</i>审批</div>
+          <div class="app" data-at="1.3"><i style="background:linear-gradient(145deg,#9fbcd0,#5f86a1)">👥</i>部门人事</div>
+          <div class="app" data-at="1.6"><i style="background:linear-gradient(145deg,#8aa6c1,#566f8c)">💰</i>工资单</div>
+          <div class="app" data-at="1.9"><i style="background:linear-gradient(145deg,#b5c99a,#788f5d)">🏛️</i>楼主预约</div>
+          <div class="app" data-at="2.2"><i style="background:linear-gradient(145deg,#c5bbd8,#8b7ea8)">📌</i>任务管理</div>
+          <div class="app" data-at="2.5"><i style="background:linear-gradient(145deg,#ebc583,#bd9143)">📣</i>公告</div>
+          <div class="app" data-at="2.8"><i style="background:linear-gradient(145deg,#b0a4b5,#7a6d80)">🔗</i>团体协作</div>
+        </div>
+        <div class="news" data-at="3.8" style="margin-top:14px"><b>今日要闻</b><br/>绣衣要闻 · 楼内新规 · 内外交流 · 广陵爆报，点开可对线评论，也能 AI 现编江湖风声。</div>
+        <div class="news" data-at="5.6" style="margin-top:10px;background:rgba(255,252,247,.7);color:#2c3727;border-color:rgba(255,255,255,.7)"><b style="color:#7a2a20">密探们各有脾气</b><br/>绩效考核限时抢分 · 点卯请假 · 报销采购审批 · 四部协同派单，AI 代拟折子也行。</div>
+        <div class="tabbar" data-at="7.2"><span>消息</span><span>通讯录</span><span>我的</span></div>
+      </div>
+
+      <!-- ACT7 休闲一刻 -->
+      <div class="layer a5" data-act="6" style="background:linear-gradient(175deg,#efe3cb,#d5bf94 55%,#a98a56)">
+        <div class="ws">休闲一刻 · 游戏厅<small>十五种玩法，一屋子都是乐子</small></div>
+        <div class="dock" style="grid-template-columns:repeat(3,1fr);gap:10px 6px">
+          <div class="app" data-at="0.4"><i style="background:linear-gradient(145deg,#c97b5a,#8a4a30)">🏹</i>修武扬文</div>
+          <div class="app" data-at="0.65"><i style="background:linear-gradient(145deg,#a8342b,#6d1d17)">🎲</i>通灵赌坊</div>
+          <div class="app" data-at="0.9"><i style="background:linear-gradient(145deg,#8aa6c1,#566f8c)">📊</i>州郡年表</div>
+          <div class="app" data-at="1.15"><i style="background:linear-gradient(145deg,#9dc9a2,#5f8f66)">🗺️</i>驿路通</div>
+          <div class="app" data-at="1.4"><i style="background:linear-gradient(145deg,#8f7bb3,#5b4a82)">🔮</i>谶纬小摊</div>
+          <div class="app" data-at="1.65"><i style="background:linear-gradient(145deg,#a6dbe8,#5da7bd)">🌤️</i>献帝晴雨表</div>
+          <div class="app" data-at="1.9"><i style="background:linear-gradient(145deg,#d9a7a0,#a86a62)">🦋</i>蝴蝶效应</div>
+          <div class="app" data-at="2.15"><i style="background:linear-gradient(145deg,#b5c99a,#788f5d)">🌾</i>古怪农场</div>
+          <div class="app" data-at="2.4"><i style="background:linear-gradient(145deg,#e6cf9c,#b79a55)">📚</i>学习系统</div>
+          <div class="app" data-at="2.65"><i style="background:linear-gradient(145deg,#cfd8c9,#8fa086)">🪞</i>方天水镜</div>
+          <div class="app" data-at="2.9"><i style="background:linear-gradient(145deg,#6b7a63,#3c4a37)">⚔️</i>太白杀阵</div>
+          <div class="app" data-at="3.15"><i style="background:linear-gradient(145deg,#e8c3a8,#b98a6d)">🤥</i>谁在说谎</div>
+          <div class="app" data-at="3.4"><i style="background:linear-gradient(145deg,#4a4540,#1d1a17)">🕵️</i>绣衣悬案录</div>
+          <div class="app" data-at="3.65"><i style="background:linear-gradient(145deg,#f4c1c1,#d98a8a)">♨️</i>团建活动</div>
+          <div class="app" data-at="3.9"><i style="background:linear-gradient(145deg,#ebc583,#bd9143)">🎨</i>画猜游戏</div>
+        </div>
+        <div class="news" data-at="5.2" style="margin-top:12px"><b>修武</b>含木桩、蹴鞠、射箭、划船、音律、2048、记忆……<br/><b>蝴蝶效应</b>可沙盘推演、生成戏折并导出长卷。</div>
+      </div>
+
+      <!-- ACT8 傩系列与更多 -->
+
+      <div class="layer a5" data-act="4">
+        <div class="ws">傩系列 · 更多应用<small>桌面之外，还有整座生活圈</small></div>
+        <div class="dock" id="dock">
+          <div class="app" data-k="0"><i style="background:linear-gradient(145deg,#6d4c3a,#3b2519)">🎞️</i>观影</div>
+          <div class="app" data-k="1"><i style="background:linear-gradient(145deg,#c9a86a,#8d6b34)">📻</i>电台</div>
+          <div class="app" data-k="2"><i style="background:linear-gradient(145deg,#d6724b,#8c5e28)">📜</i>修业</div>
+          <div class="app" data-k="3"><i style="background:linear-gradient(145deg,#8f7bb3,#5b4a82)">🔎</i>云镜</div>
+          <div class="app" data-k="4"><i style="background:linear-gradient(145deg,#8fa6b5,#4f6677)">🎮</i>掌机</div>
+          <div class="app" data-k="5"><i style="background:linear-gradient(145deg,#e6cf9c,#b79a55)">🃏</i>游戏</div>
+          <div class="app" data-k="6"><i style="background:linear-gradient(145deg,#d9a7a0,#a86a62)">🥢</i>OC 点单</div>
+          <div class="app" data-k="7"><i style="background:linear-gradient(145deg,#a9b8a0,#5d7054)">🏫</i>学宫</div>
+          <div class="app" data-k="8"><i style="background:linear-gradient(145deg,#d9d9d1,#9a9a92)">⚕️</i>杏林济生</div>
+          <div class="app" data-k="9"><i style="background:linear-gradient(145deg,#9dc9a2,#5f8f66)">📖</i>阅读</div>
+          <div class="app" data-k="10"><i style="background:linear-gradient(145deg,#85c9d9,#4b8fa3)">🎵</i>音乐</div>
+          <div class="app" data-k="11"><i style="background:linear-gradient(145deg,#a6dbe8,#5da7bd)">⛅</i>天气</div>
+          <div class="app" data-k="12"><i style="background:linear-gradient(145deg,#f4c1c1,#d98a8a)">📅</i>日历</div>
+          <div class="app" data-k="13"><i style="background:linear-gradient(145deg,#d5d5cd,#a2a29a)">💬</i>论坛</div>
+          <div class="app" data-k="14"><i style="background:linear-gradient(145deg,#fbf4e8,#d9c9a8)">🛍️</i>商城</div>
+          <div class="app" data-k="15"><i style="background:linear-gradient(145deg,#e7c9a0,#a97c46)">🏠</i>心纸屋</div>
+        </div>
+        <div class="cwrap" id="callwrap"></div>
+      </div>
+
+      <!-- ACT6 -->
+      <div class="layer a6" data-act="5">
+        <div class="logo" data-asset="app_logo" data-at="0.3">鸢</div>
+        <h2 data-at="0.9">鸢小手机</h2>
+        <div class="en" data-at="1.3">Milvus · Phone</div>
+        <div class="pwa" data-at="2.2">支持 PWA 添加到手机主屏幕</div>
+        <p data-at="3.2">打开网页<br/>即刻开启你与袁基的专属羁绊</p>
+        <div class="disc" data-at="4.6">本作品为《代号鸢》同人向网页交互项目演示，非官方应用；<br/>AI 对话功能需自备接口，仅作个人学习与兴趣交流。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="brand"><b>Milvus-Phone</b>鸢 小 手 机</div>
+  <div class="seal">鸢</div>
+  <div class="progress" id="progress"></div>
+</div>
+</div>
+
+<div class="bar-dir">
+  <button class="btn pri" id="bPlay">▶ 播放</button>
+  <button class="btn" id="bRestart">↺ 重头</button>
+  <span class="tc" id="tc">00:00 / 01:10</span>
+  <span id="pills" style="display:contents"></span>
+  <button class="btn" id="bRec">纯净录屏 (H)</button>
+</div>
+
+<script>
+/* ================= 配置中心：改这里即可 ================= */
+const PROMO = { acts:[
+ {d:8, tag:"序幕", title:"如果，你的手机里<br>住着一个会回你消息的袁基？", sub:"鸢小手机 · 竖屏沉浸式伴侣网页", phone:"p-tilt", name:"序幕"},
+ {d:10,tag:"桌面美学", title:"锁屏，是你们<br>每天见的第一面", sub:"字体 · 阴影 · 诗签 · 壁纸，全部自己定", phone:"p-tilt2", name:"锁屏"},
+ {d:14,tag:"活人感", title:"不只是回复，<br>是他真的在对面", sub:"表情包斗图 × 构造状态气泡 × 灵犀微动效", phone:"", name:"活人感"},
+ {d:17,tag:"情侣空间", title:"十一种玩法，<br>把日常过成双人副本", sub:"翻页手账 · 听声辨位 · 飞花传令……", phone:"p-tilt", name:"情侣空间"},
+ {d:20,tag:"太疾驰", title:"逛集市、点外卖、抢戏票，<br>一个 App 全包圆", sub:"财神红包 · 二手拍卖 · 餐饮 · 购物 · 抢票 · 代付 · 配送 · 送礼", phone:"p-tilt2", name:"太疾驰"},
+ {d:10,tag:"绣衣楼", title:"楼主办公重地，<br>九格楼务尽在掌中", sub:"问卷 · 假勤 · 审批 · 人事 · 工资 · 预约 · 任务 · 公告 · 协作", phone:"p-tilt", name:"绣衣楼"},
+ {d:9, tag:"休闲一刻", title:"十五种玩法，<br>一屋子都是乐子", sub:"修武 · 赌坊 · 驿路通 · 蝴蝶效应 · 水镜 · 悬案录 · 团建……", phone:"", name:"游戏厅"},
+ {d:17,tag:"更多应用", title:"傩系列、杏林、阅读、音乐……<br>一部手机，一座城", sub:"观影 · 电台 · 修业 · 云镜 · 掌机 · 学宫 · 点单 · 商城 · 心纸屋", phone:"p-far", name:"更多"},
+ {d:8, tag:"邀请", title:"打开网页，<br>即刻开启羁绊", sub:"鸢小手机 · Milvus-Phone", phone:"p-far", name:"收尾"}
+]};
+const CALLS=[
+ ["傩·观影","民国胶卷放映室，AI 选片，一起看一起吐槽。"],
+ ["傩·电台","象牙旋钮调频的木质收音机，退出后台继续播。"],
+ ["傩·修业","竹简课案 + B 站真实课程，名士陪你研习。"],
+ ["傩·云镜","偷看名士的私密搜索足迹与 AI 网页快照。"],
+ ["傩·掌机","Game Boy 灰蓝拟物机身，按键真能按。"],
+ ["傩·游戏","复古卡带仓，记录在玩 / 想玩 / 通关。"],
+ ["OC 点单","定制茶点，下单后听他的专属食评。"],
+ ["今日学宫","雏雁太学教务与校园生活，名士伴读。"],
+ ["杏林济生","华佗、张仲景等名医问诊辨症，联动煎药台。"],
+ ["阅读","典籍书卷、竹简手札，名士伴读，字号纸色可调。"],
+ ["音乐","古风汉韵清音雅乐，案前随身听。"],
+ ["天气","时令节气与各地风云物候速览。"],
+ ["日历","黄历宜忌、名士生辰、抢票与重要日子联动。"],
+ ["论坛","江湖密报、百晓生热点与广陵八卦。"],
+ ["应用商城","自由收纳桌面图标，发现自制新微应用。"],
+ ["心纸屋","传讯内的 2.5D 交互小房间，自由布置。"]
+];
+const A=PROMO.acts, TOTAL=A.reduce((s,a)=>s+a.d,0);
+let cur=0,playing=false,last=null,actIdx=-1;
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const layers=$$(".layer");
+
+/* 进度条 / 导航胶囊 */
+A.forEach((a,i)=>{
+  $("#progress").insertAdjacentHTML("beforeend",`<div class="seg"><i></i></div>`);
+  const b=document.createElement("button");b.className="btn pill";b.textContent=`${i+1}.${a.name}`;
+  b.onclick=()=>seek(start(i)+.05);$("#pills").appendChild(b);
+});
+const start=i=>A.slice(0,i).reduce((s,a)=>s+a.d,0);
+const fmt=t=>{t=Math.floor(t);return String(Math.floor(t/60)).padStart(2,"0")+":"+String(t%60).padStart(2,"0")};
+function where(t){let acc=0;for(let i=0;i<A.length;i++){if(t<acc+A[i].d||i===A.length-1)return{i,l:Math.max(0,t-acc)};acc+=A[i].d}}
+
+function enter(i){
+  actIdx=i;const a=A[i];
+  $("#cap-index").textContent=String(i+1).padStart(2,"0");
+  $("#cap-tag").textContent=a.tag;$("#cap-title").innerHTML=a.title;$("#cap-sub").textContent=a.sub;
+  $$(".cap-body,.cap-index").forEach(e=>{e.classList.remove("cap-anim");void e.offsetWidth;e.classList.add("cap-anim")});
+  layers.forEach((e,k)=>e.classList.toggle("on",k===i));
+  $$(".pill").forEach((e,k)=>e.classList.toggle("on",k===i));
+  $("#phone").className="phone "+a.phone;
+}
+
+function inner(i,l){
+  const layer=layers[i];
+  layer.querySelectorAll("[data-at]").forEach(e=>e.classList.toggle("in",l>=+e.dataset.at));
+  layer.querySelectorAll("[data-from]").forEach(e=>e.classList.toggle("show",l>=+e.dataset.from&&l<+e.dataset.to));
+  if(i===1){
+    const p=l>=5.6;$("#a2").classList.toggle("poem",p);
+    const bg=p?(ASSETS.lock_bg_2||ASSETS.lock_bg_1):ASSETS.lock_bg_1;
+    $("#a2").style.backgroundImage=bg?`url("${bg}")`:"";
+  }
+  if(i===2){$("#petals").classList.toggle("show",l>=6.4);$("#glow").classList.toggle("show",l>=6.4)}
+  {
+    layer.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.classList.contains("show")));
+    layer.querySelectorAll("[data-bar]").forEach(b=>b.classList.toggle("go",b.closest(".panel").classList.contains("show")));
+  }
+  if(i===7){
+    const per=0;
+    const k=l<1.5?-1:Math.min(CALLS.length-1,Math.floor((l-1.5)/ (A[7].d-1.5) * CALLS.length));
+    $$("#dock .app").forEach((e,n)=>{e.classList.toggle("hl",n===k);e.classList.toggle("dim",k>=0&&n!==k)});
+    const w=$("#callwrap");
+    if(k<0){w.innerHTML=""}else if(w.dataset.k!=k){w.dataset.k=k;
+      w.innerHTML=`<div class="callout" style="animation:capIn .5s both"><b>${CALLS[k][0]}</b><span>${CALLS[k][1]}</span></div>`}
+  }
+}
+
+function render(t){
+  cur=Math.max(0,Math.min(TOTAL,t));
+  $("#tc").textContent=`${fmt(cur)} / ${fmt(TOTAL)}`;
+  const {i,l}=where(cur);
+  if(i!==actIdx)enter(i);
+  inner(i,l);
+  $$("#progress .seg i").forEach((e,k)=>{e.style.width=(k<i?100:k===i?l/A[k].d*100:0)+"%"});
+}
+function seek(t){$("#callwrap").dataset.k="";render(t)}
+function tick(n){if(!playing)return;if(last!==null){const dt=(n-last)/1000;
+  if(cur+dt>=TOTAL){render(TOTAL);setPlay(false);return}render(cur+dt)}last=n;requestAnimationFrame(tick)}
+function setPlay(p){playing=p;$("#bPlay").textContent=p?"⏸ 暂停":"▶ 播放";
+  if(p){if(cur>=TOTAL)cur=0;last=performance.now();requestAnimationFrame(tick)}else last=null}
+$("#bPlay").onclick=()=>setPlay(!playing);
+$("#bRestart").onclick=()=>{seek(0);setPlay(true)};
+const rec=()=>{document.body.classList.toggle("record-mode");fit()};
+$("#bRec").onclick=rec;
+addEventListener("keydown",e=>{
+  if(e.code==="Space"){e.preventDefault();setPlay(!playing)}
+  if(e.key==="h"||e.key==="H")rec();
+  if(e.code==="ArrowRight")seek(start(Math.min(A.length-1,actIdx+1))+.05);
+  if(e.code==="ArrowLeft")seek(start(Math.max(0,actIdx-1))+.05);
+});
+
+/* 自适应缩放 */
+function fit(){
+  const rec=document.body.classList.contains("record-mode");
+  const h=innerHeight-(rec?0:70), w=innerWidth;
+  const s=Math.min(h/960,w/540);
+  $("#scaler").style.transform=`scale(${s})`;
+  $("#scaler").style.margin=`${(960*s-960)/2}px ${(540*s-540)/2}px`;
+  if(!rec)$("#scaler").style.marginBottom=`${(960*s-960)/2+70}px`;
+}
+addEventListener("resize",fit);fit();
+
+/* ================= 自动加载 promo_assets/ ================= */
+const KEYS=["yuanji_avatar","user_avatar","lock_bg_1","lock_bg_2","sticker_1","stage_bg","app_logo","journal_img"];
+const EXTS=["png","jpg","jpeg","webp","gif"];const ASSETS={};
+function probe(n,i=0){return new Promise(r=>{if(i>=EXTS.length)return r(null);
+  const u=`promo_assets/${n}.${EXTS[i]}`;const im=new Image();im.onload=()=>r(u);im.onerror=()=>r(probe(n,i+1));im.src=u})}
+(async()=>{
+  const res=await Promise.all(KEYS.map(async k=>[k,await probe(k)]));
+  for(const[k,u]of res){if(!u)continue;ASSETS[k]=u;
+    if(["yuanji_avatar","user_avatar","app_logo"].includes(k))
+      $$(`[data-asset="${k}"]`).forEach(e=>e.innerHTML=`<img src="${u}" alt="">`);
+    if(k==="sticker_1"){const s=$("#sticker-slot");s.innerHTML=`<img src="${u}" style="width:100%;border-radius:10px;display:block">`;s.style.padding="5px"}
+    if(k==="stage_bg"){const s=$("#stage");s.style.backgroundImage=`linear-gradient(rgba(16,13,11,.55),rgba(16,13,11,.7)),url("${u}")`}
+    if(k==="journal_img"){const p=$(".pg.l");if(p)p.insertAdjacentHTML("beforeend",`<img src="${u}" style="width:100%;margin-top:6px;border-radius:4px">`)}
+  }
+  render(cur);
+})();
+render(0);
+</script>
+</body>
+</html>

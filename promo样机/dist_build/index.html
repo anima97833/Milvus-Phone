@@ -1,0 +1,1041 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>鸢小手机 · 9:16 可交互宣传片样机 v5（21图全联动版）</title>
+<style>
+:root{
+  --olive:#6d735b; --olive-d:#3c4332; --olive-l:#a9b39a; --coral:#d9774e;
+  --paper:#fdfbf6; --text:#3c4332; --muted:#7f8472;
+  --serif:"Songti SC","Noto Serif SC","SimSun",serif; --sans:"PingFang SC","Noto Sans SC","Microsoft YaHei",-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:#232520;font-family:var(--sans);overflow:hidden;user-select:none;display:flex;align-items:center;justify-content:center}
+
+#scaler{position:relative;width:540px;height:960px;transform-origin:center center;flex-shrink:0}
+#stage{position:absolute;inset:0;overflow:hidden;border-radius:24px;color:var(--text);
+  background:
+    radial-gradient(70% 38% at 15% 12%,rgba(255,255,255,.72),transparent 70%),
+    radial-gradient(60% 40% at 90% 40%,rgba(236,213,220,.92),transparent 70%),
+    radial-gradient(80% 45% at 20% 90%,rgba(176,190,235,.85),transparent 70%),
+    linear-gradient(180deg,#d4daf0 0%,#e7dcea 55%,#f2e6e2 100%);
+  box-shadow:0 30px 90px rgba(0,0,0,.55)}
+body.record-mode #stage{border-radius:0;box-shadow:none}
+
+/* ---------- 顶部电影感字幕 ---------- */
+.caption{position:absolute;top:36px;left:40px;right:40px;z-index:30;pointer-events:none}
+.cap-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.cap-mode{font-size:10.5px;letter-spacing:.16em;padding:3px 10px;border-radius:99px;background:var(--olive);color:#f7f5ec;font-weight:700}
+.cap-mode.free{background:var(--coral)}
+.cap-tag{font-size:11px;letter-spacing:.24em;color:var(--olive-d);font-weight:700}
+.cap-line{flex:1;height:1px;background:linear-gradient(90deg,rgba(109,115,91,.45),transparent)}
+.cap-title{font-family:var(--serif);font-weight:900;font-size:25px;line-height:1.38;color:var(--olive-d);letter-spacing:.04em}
+.cap-sub{margin-top:6px;font-size:11.5px;letter-spacing:.08em;color:#666c5a}
+.cap-anim{animation:capIn .55s cubic-bezier(.2,.8,.2,1) both}
+@keyframes capIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ---------- 手机样机画框（比例对齐真实截图 ~1:1.43，拒绝纵向拉伸变形） ---------- */
+.frame{position:absolute;left:52px;top:190px;width:436px;height:636px;border-radius:38px;padding:8px;z-index:10;
+  background:linear-gradient(145deg,#ffffff,#eae7dc);
+  box-shadow:0 28px 60px rgba(60,67,50,.28),0 6px 16px rgba(60,67,50,.14),inset 0 0 0 1.5px rgba(255,255,255,.95)}
+.view{position:relative;width:100%;height:100%;border-radius:31px;overflow:hidden;background:#f5f2e9}
+
+/* 屏幕画面层：去掉常驻 transform:scale(1) 图层合成模糊，激活态使用 transform:none 走原生像素渲染 */
+.screen-layer{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .25s ease}
+.screen-layer.active{opacity:1;pointer-events:auto;transform:none}
+.screen-img{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  object-fit:cover;object-position:center top;display:block;
+  image-rendering:-webkit-optimize-contrast;
+  -webkit-backface-visibility:hidden;backface-visibility:hidden
+}
+/* 裁掉部分截图右侧浏览器滚动条白边 */
+.screen-img.trim-right{width:104.8%;height:100%;object-fit:cover;object-position:left top}
+
+/* ---------- 可点击热区 (Hotspots) ---------- */
+.hotspot{position:absolute;z-index:15;cursor:pointer;border-radius:14px;transition:background .2s,box-shadow .2s,transform .15s}
+.hotspot:active{transform:scale(.95)}
+body.show-hints .hotspot::after{
+  content:"";position:absolute;inset:2px;border-radius:inherit;
+  border:1.5px dashed rgba(217,119,78,.0);transition:all .25s;pointer-events:none
+}
+body.show-hints .hotspot:hover{background:rgba(217,119,78,.14)}
+body.show-hints .hotspot:hover::after{border-color:rgba(217,119,78,.75)}
+
+body.debug-hotspots .hotspot{
+  background:rgba(217,119,78,.24)!important;
+  border:1.5px solid rgba(217,119,78,.9)!important;
+}
+.hotspot-label{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  white-space:nowrap;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;
+  background:rgba(35,37,31,.85);color:#fff;pointer-events:none;opacity:0;transition:opacity .2s;
+  box-shadow:0 4px 10px rgba(0,0,0,.25)
+}
+.hotspot:hover .hotspot-label, body.debug-hotspots .hotspot-label{opacity:1}
+
+/* 脉冲引导点 */
+.pulse-dot{
+  position:absolute;right:6px;top:6px;width:9px;height:9px;border-radius:50%;
+  background:var(--coral);box-shadow:0 0 0 0 rgba(217,119,78,.7);
+  animation:pulseRing 1.8s infinite;pointer-events:none
+}
+body.record-mode .pulse-dot{display:none}
+@keyframes pulseRing{
+  0%{box-shadow:0 0 0 0 rgba(217,119,78,.7)}
+  70%{box-shadow:0 0 0 9px rgba(217,119,78,0)}
+  100%{box-shadow:0 0 0 0 rgba(217,119,78,0)}
+}
+
+/* ---------- 仿真触控光标 & 点击波纹 ---------- */
+#cursor{
+  position:absolute;width:28px;height:28px;margin-left:-14px;margin-top:-14px;border-radius:50%;
+  background: radial-gradient(circle,rgba(255,255,255,.95) 0%,rgba(217,119,78,.85) 65%,rgba(217,119,78,0) 100%);
+  box-shadow:0 4px 14px rgba(217,119,78,.55),inset 0 0 0 2px #fff;
+  z-index:80;pointer-events:none;opacity:0;
+  transition:left .52s cubic-bezier(.22,1,.36,1),top .52s cubic-bezier(.22,1,.36,1),opacity .25s,transform .18s
+}
+#cursor.show{opacity:1}
+#cursor.tap{transform:scale(.78)}
+.ripple{
+  position:absolute;width:20px;height:20px;margin-left:-10px;margin-top:-10px;border-radius:50%;
+  border:2.5px solid var(--coral);background:rgba(217,119,78,.22);
+  z-index:75;pointer-events:none;animation:rip .6s ease-out forwards
+}
+@keyframes rip{to{transform:scale(3.4);opacity:0}}
+
+/* ---------- 锁屏顶部袁基通知横幅 ---------- */
+.lock-notifs{position:absolute;left:14px;right:14px;top:48px;z-index:25;display:flex;flex-direction:column;gap:8px}
+.notif-card{
+  display:flex;gap:10px;align-items:center;padding:11px 13px;border-radius:20px;
+  background:rgba(253,251,246,.93);backdrop-filter:blur(10px);
+  box-shadow:0 12px 28px rgba(60,67,50,.22);border:1px solid rgba(255,255,255,.9);
+  cursor:pointer;transition:transform .25s,opacity .35s;
+  animation:slideDown .55s cubic-bezier(.22,1.2,.36,1) both
+}
+.notif-card:hover{transform:translateY(-2px)}
+@keyframes slideDown{from{opacity:0;transform:translateY(-20px) scale(.95)}to{opacity:1;transform:none}}
+.av{width:38px;height:38px;border-radius:50%;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,var(--olive-l),var(--olive));color:#fff;font-family:var(--serif);font-weight:900;font-size:17px}
+.av img{width:100%;height:100%;object-fit:cover;object-position:50% 20%}
+.av.me-av img{object-position:50% 45%}
+.unlock-bar{
+  position:absolute;left:50%;bottom:20px;transform:translateX(-50%);z-index:25;
+  padding:7px 18px;border-radius:99px;font-size:11.5px;font-weight:700;letter-spacing:.12em;
+  background:rgba(253,251,246,.82);color:var(--olive-d);backdrop-filter:blur(8px);
+  box-shadow:0 6px 18px rgba(60,67,50,.18);cursor:pointer;animation:bob 2s ease-in-out infinite
+}
+@keyframes bob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,-5px)}}
+
+/* ---------- 太疾驰「元」结算与代付弹窗 ---------- */
+.modal-mask{
+  position:absolute;inset:0;background:rgba(35,37,31,.48);backdrop-filter:blur(4px);
+  z-index:45;display:none;align-items:flex-end;justify-content:center;padding:14px
+}
+.modal-mask.open{display:flex;animation:fadeIn .25s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.pay-sheet{
+  width:100%;background:#fdfbf6;border-radius:26px;padding:18px 16px;color:var(--text);
+  box-shadow:0 20px 50px rgba(0,0,0,.35);border:1px solid rgba(109,115,91,.2)
+}
+.pay-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.pay-head b{font-family:var(--serif);font-size:16px;color:var(--olive-d)}
+.pay-close{cursor:pointer;padding:2px 8px;border-radius:99px;background:#ece9dc;font-size:12px}
+.pay-item{display:flex;justify-content:space-between;align-items:center;padding:9px 11px;border-radius:14px;background:#f4f1e6;font-size:12px;margin-bottom:7px}
+.pay-item em{font-style:normal;color:var(--coral);font-weight:700}
+.pay-btns{display:flex;gap:8px;margin-top:10px}
+.pay-btn{flex:1;padding:10px 0;border-radius:99px;text-align:center;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--olive);color:var(--olive-d);background:#fff}
+.pay-btn.pri{background:var(--olive);color:#fff}
+.pay-status{margin-top:10px;padding:9px 12px;border-radius:14px;background:#e6ece0;color:#394631;font-size:11.5px;line-height:1.55;display:none}
+.pay-status.show{display:block;animation:capIn .35s ease}
+
+/* ---------- 传讯：袁基可交互活人感聊天窗 ---------- */
+.chat-screen{
+  display:flex;flex-direction:column;
+  background:linear-gradient(rgba(255,252,247,.18),rgba(255,252,247,.32)),url("assets/chat_bg.jpg") center/cover no-repeat
+}
+.chat-top{
+  padding:14px 14px 11px;background:rgba(253,251,246,.92);border-bottom:1px solid rgba(109,115,91,.15);
+  display:flex;align-items:center;gap:10px;z-index:5
+}
+.chat-back{
+  width:30px;height:30px;border-radius:50%;background:#ece9dc;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;font-weight:700;color:var(--olive-d)
+}
+.chat-status-pill{
+  margin-left:auto;font-size:10.5px;padding:4px 10px;border-radius:99px;
+  background:#e5eadf;color:var(--olive-d);font-weight:600
+}
+.construct-bar{
+  margin:8px 12px 0;padding:7px 12px;border-radius:99px;font-size:11px;color:#4e3d28;
+  background:linear-gradient(90deg,rgba(232,218,185,.9),rgba(236,200,196,.85));
+  border:1px solid rgba(255,255,255,.85);box-shadow:0 6px 16px rgba(109,115,91,.12);
+  display:flex;align-items:center;gap:7px;z-index:4
+}
+.construct-bar::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--coral);flex-shrink:0}
+.chat-msgs{
+  flex:1;padding:12px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;position:relative
+}
+.msg{display:flex;gap:8px;align-items:flex-end;animation:capIn .32s ease both}
+.msg.me{flex-direction:row-reverse}
+.bub{max-width:76%;padding:9px 13px;border-radius:16px;font-size:12.5px;line-height:1.58;box-shadow:0 3px 10px rgba(60,67,50,.07)}
+.bub.ta{background:#ffffff;color:var(--text);border-bottom-left-radius:4px}
+.bub.me{background:var(--olive);color:#fff;border-bottom-right-radius:4px}
+.sticker-card{
+  background:#fff;border:1.5px solid rgba(109,115,91,.22);border-radius:16px;padding:8px 12px;
+  text-align:center;width:130px;box-shadow:0 8px 18px rgba(60,67,50,.09)
+}
+.sticker-card img{width:100%;border-radius:10px;display:block}
+.sticker-card .emo{font-size:34px;line-height:1.15}
+.sticker-card .cap{font-size:10.5px;font-weight:700;color:var(--coral);margin-top:4px}
+
+.chat-prompts{
+  padding:9px 11px 12px;background:rgba(253,251,246,.95);border-top:1px solid rgba(109,115,91,.14);z-index:5
+}
+.prompt-tip{font-size:10px;color:var(--muted);margin-bottom:6px;display:flex;justify-content:space-between}
+.prompt-list{display:flex;flex-wrap:wrap;gap:6px}
+.prompt-chip{
+  font-size:11px;padding:6px 11px;border-radius:99px;background:#f0ede2;color:var(--olive-d);
+  border:1px solid rgba(109,115,91,.28);cursor:pointer;transition:all .2s;font-weight:500
+}
+.prompt-chip:hover{background:var(--olive);color:#fff}
+
+/* 灵犀花瓣层 */
+.petals{position:absolute;inset:0;pointer-events:none;overflow:hidden;opacity:0;transition:opacity .7s;z-index:30}
+.petals.on{opacity:1}
+.petals i{position:absolute;top:-16px;width:10px;height:13px;border-radius:80% 0 80% 0;background:rgba(228,175,175,.85);animation:fall 3.8s linear infinite}
+@keyframes fall{0%{transform:translate(0,-10px) rotate(0)}100%{transform:translate(38px,620px) rotate(260deg);opacity:.1}}
+
+/* 轻提示 Toast */
+#toast{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.92);
+  background:rgba(35,37,31,.93);color:#fdfbf6;padding:13px 18px;border-radius:18px;
+  font-size:12px;line-height:1.6;text-align:center;z-index:70;pointer-events:none;
+  opacity:0;transition:opacity .25s,transform .25s;box-shadow:0 16px 36px rgba(0,0,0,.38);width:84%
+}
+#toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+/* ---------- 底部卖点标签 ---------- */
+.tagrow{position:absolute;left:36px;right:36px;top:844px;z-index:30;display:flex;flex-wrap:wrap;gap:7px;justify-content:center}
+.tg{font-size:11px;padding:6px 12px;border-radius:99px;background:rgba(255,255,255,.88);color:var(--olive-d);
+  border:1px solid rgba(109,115,91,.24);box-shadow:0 6px 14px rgba(60,67,50,.08);cursor:pointer;transition:transform .2s,background .2s}
+.tg:hover{transform:translateY(-2px);background:#fff}
+.tg::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--coral);margin-right:6px;vertical-align:1px}
+
+.brand{position:absolute;left:44px;bottom:26px;right:44px;z-index:30;display:flex;justify-content:space-between;align-items:center;font-size:10px;letter-spacing:.3em;color:rgba(60,67,50,.55)}
+.brand b{font-family:"Newsreader",serif;font-style:italic;font-weight:500;font-size:14px;letter-spacing:.15em;color:var(--olive)}
+
+/* ---------- 导演控制栏 ---------- */
+.dir{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);z-index:100;display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:center;
+  padding:8px 12px;border-radius:16px;background:rgba(35,37,31,.93);border:1px solid rgba(255,255,255,.15);backdrop-filter:blur(12px);
+  box-shadow:0 14px 34px rgba(0,0,0,.45);max-width:98vw;color:#f1efe4;transition:opacity .3s}
+body.record-mode .dir,body.record-mode .keys{opacity:0;pointer-events:none}
+.btn{background:rgba(255,255,255,.1);color:#f1efe4;border:1px solid rgba(255,255,255,.16);border-radius:9px;padding:5px 9px;font-size:11.5px;cursor:pointer;font-family:var(--sans)}
+.btn:hover{background:rgba(255,255,255,.2)}
+.btn.pri{background:var(--olive);border-color:var(--olive-l)}
+.btn.pill{font-size:11px;padding:4px 8px;opacity:.75}.btn.pill.on{opacity:1;background:rgba(217,119,78,.38);border-color:var(--coral)}
+.keys{position:fixed;top:10px;right:14px;font-size:11px;color:rgba(255,255,255,.45);z-index:100}
+</style>
+</head>
+<body class="show-hints">
+<div class="keys">可直接点击手机画面交互 ｜ 空格 自动演示/暂停 ｜ D 显示热区框 ｜ H 纯净录屏</div>
+
+<div id="scaler"><div id="stage">
+  <!-- 顶部标题 -->
+  <div class="caption" id="caption">
+    <div class="cap-top">
+      <span class="cap-mode" id="cap-mode">🖐️ 可交互试玩</span>
+      <span class="cap-tag" id="cap-tag">锁屏 · 第一面</span>
+      <span class="cap-line"></span>
+    </div>
+    <div class="cap-title" id="cap-title">如果，你的手机里<br>住着一个会回你消息的袁基？</div>
+    <div class="cap-sub" id="cap-sub">点击右上角「···」体验锁屏装扮，或点通知/底部解锁进入桌面</div>
+  </div>
+
+  <!-- 手机画框 -->
+  <div class="frame">
+    <div class="view" id="view">
+      <!-- 仿真自动演示光标 -->
+      <div id="cursor"></div>
+      <!-- 灵犀花瓣特效层 -->
+      <div class="petals" id="petals">
+        <i style="left:12%"></i><i style="left:28%;animation-delay:.9s"></i>
+        <i style="left:48%;animation-delay:.3s"></i><i style="left:68%;animation-delay:1.5s"></i>
+        <i style="left:84%;animation-delay:.6s"></i>
+      </div>
+      <!-- 轻提示 -->
+      <div id="toast"></div>
+
+      <!-- ========== 1. 锁屏页 (锁屏.png) ========== -->
+      <div class="screen-layer active" data-screen="lock">
+        <img class="screen-img" src="assets/lock.png" alt="锁屏" />
+        <div class="hotspot" style="right:3%;top:3%;width:14%;height:8%" data-action="goto:lock_guide" title="打开锁屏装扮">
+          <span class="pulse-dot"></span>
+          <span class="hotspot-label">🎨 锁屏装扮</span>
+        </div>
+        <div class="lock-notifs">
+          <div class="notif-card" data-action="goto:chat">
+            <div class="av" data-avatar="yuanji">基</div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted)">
+                <b style="color:var(--text);font-size:12px">袁基</b><span>刚刚 · 点此回复</span>
+              </div>
+              <div style="font-size:12px;color:var(--text);margin-top:2px">殿下今日批完公文了吗？桌上的茶，可还温着。</div>
+            </div>
+          </div>
+        </div>
+        <div class="unlock-bar" data-action="goto:home1">↑ 点击或上滑 · 解锁桌面</div>
+      </div>
+
+      <!-- ========== 2. 锁屏引导弹窗 (锁屏引导1.png) ========== -->
+      <div class="screen-layer" data-screen="lock_guide">
+        <img class="screen-img" src="assets/lock_guide.png" alt="锁屏装扮引导" />
+        <div class="hotspot" style="left:73%;top:45%;width:19%;height:9%" data-action="goto:lock_diy1">
+          <span class="pulse-dot"></span>
+          <span class="hotspot-label">下一步</span>
+        </div>
+        <div class="hotspot" style="left:80%;top:28%;width:12%;height:7%" data-action="goto:lock_diy1">
+          <span class="hotspot-label">跳过引导</span>
+        </div>
+      </div>
+
+      <!-- ========== 3A~3C. 锁屏装扮三页签 (锁屏装扮.png / 2 / 3) ========== -->
+      <div class="screen-layer" data-screen="lock_diy1">
+        <img class="screen-img" src="assets/lock_diy_a.png" alt="锁屏装扮-背景壁纸" />
+        <div class="hotspot" style="left:2%;top:13%;width:22%;height:8%" data-action="goto:lock_diy1"><span class="hotspot-label">🎨 背景壁纸</span></div>
+        <div class="hotspot" style="left:25%;top:13%;width:25%;height:8%" data-action="goto:lock_diy2"><span class="pulse-dot"></span><span class="hotspot-label">🎚️ 元素透明度</span></div>
+        <div class="hotspot" style="left:51%;top:13%;width:23%;height:8%" data-action="goto:lock_diy3"><span class="hotspot-label">💻 自定义CSS</span></div>
+        <div class="hotspot" style="left:79%;top:2%;width:8%;height:8%" data-action="goto:lock_guide"><span class="hotspot-label">❤️ 重看引导</span></div>
+        <div class="hotspot" style="left:87%;top:2%;width:9%;height:8%" data-action="goto:lock"><span class="hotspot-label">关闭</span></div>
+        <div class="hotspot" style="left:35%;top:88%;width:59%;height:9%" data-action="goto:lock"><span class="hotspot-label">✅ 完成并保存</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="lock_diy2">
+        <img class="screen-img" src="assets/lock_diy_b.png" alt="锁屏装扮-元素透明度" />
+        <div class="hotspot" style="left:3%;top:13%;width:22%;height:8%" data-action="goto:lock_diy1"><span class="hotspot-label">🎨 背景壁纸</span></div>
+        <div class="hotspot" style="left:26%;top:13%;width:26%;height:8%" data-action="goto:lock_diy2"><span class="hotspot-label">🎚️ 元素透明度</span></div>
+        <div class="hotspot" style="left:53%;top:13%;width:23%;height:8%" data-action="goto:lock_diy3"><span class="pulse-dot"></span><span class="hotspot-label">💻 自定义CSS</span></div>
+        <div class="hotspot" style="left:85%;top:2%;width:9%;height:8%" data-action="goto:lock_guide"><span class="hotspot-label">❤️ 引导</span></div>
+        <div class="hotspot" style="left:93%;top:2%;width:7%;height:8%" data-action="goto:lock"><span class="hotspot-label">关闭</span></div>
+        <div class="hotspot" style="left:38%;top:89%;width:60%;height:9%" data-action="goto:lock"><span class="hotspot-label">✅ 完成并保存</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="lock_diy3">
+        <img class="screen-img" src="assets/lock_diy_c.png" alt="锁屏装扮-自定义CSS" />
+        <div class="hotspot" style="left:3%;top:13%;width:22%;height:8%" data-action="goto:lock_diy1"><span class="hotspot-label">🎨 背景壁纸</span></div>
+        <div class="hotspot" style="left:26%;top:13%;width:23%;height:8%" data-action="goto:lock_diy2"><span class="hotspot-label">🎚️ 元素透明度</span></div>
+        <div class="hotspot" style="left:49%;top:13%;width:23%;height:8%" data-action="goto:lock_diy3"><span class="hotspot-label">💻 自定义CSS</span></div>
+        <div class="hotspot" style="left:88%;top:2%;width:8%;height:8%" data-action="goto:lock"><span class="hotspot-label">关闭</span></div>
+        <div class="hotspot" style="left:36%;top:88%;width:58%;height:9%" data-action="goto:home1"><span class="pulse-dot"></span><span class="hotspot-label">✅ 保存并进入桌面</span></div>
+      </div>
+
+      <!-- ========== 4A. 主屏幕第1页：卡片收起 (主屏幕布局.png) ========== -->
+      <div class="screen-layer" data-screen="home1">
+        <img class="screen-img" src="assets/home_a.png" alt="主屏幕第1页" />
+        <!-- 顶部折叠式天气卡片 -->
+        <div class="hotspot" style="left:6%;top:10%;width:88%;height:14%" data-action="goto:home1_expand">
+          <span class="pulse-dot"></span>
+          <span class="hotspot-label">💌 点击展开名士天气叮嘱</span>
+        </div>
+        <!-- 第1排图标（全部已接入真实页面！）：绣衣楼 / 杏林济生 / 情侣空间 / 天气 -->
+        <div class="hotspot" style="left:9%;top:26%;width:16%;height:13%" data-action="goto:xyl1"><span class="pulse-dot"></span><span class="hotspot-label">🏛️ 打开绣衣楼</span></div>
+        <div class="hotspot" style="left:32%;top:26%;width:16%;height:13%" data-action="goto:xl1"><span class="pulse-dot"></span><span class="hotspot-label">🌿 打开杏林济生</span></div>
+        <div class="hotspot" style="left:54%;top:26%;width:16%;height:13%" data-action="goto:cp1"><span class="pulse-dot"></span><span class="hotspot-label">💗 打开情侣空间</span></div>
+        <div class="hotspot" style="left:77%;top:26%;width:16%;height:13%" data-action="goto:weather"><span class="pulse-dot"></span><span class="hotspot-label">⛅ 打开天气</span></div>
+        <!-- 第2排图标（全部已接入真实页面！）：论坛 / 日历 / 传讯 / 阅读 -->
+        <div class="hotspot" style="left:9%;top:43%;width:16%;height:13%" data-action="goto:lt1"><span class="pulse-dot"></span><span class="hotspot-label">🗣️ 打开论坛</span></div>
+        <div class="hotspot" style="left:32%;top:43%;width:16%;height:13%" data-action="goto:rl1"><span class="pulse-dot"></span><span class="hotspot-label">📅 打开日历</span></div>
+        <div class="hotspot" style="left:54%;top:43%;width:16%;height:13%" data-action="goto:chat"><span class="pulse-dot"></span><span class="hotspot-label">💬 传讯（与袁基对话）</span></div>
+        <div class="hotspot" style="left:77%;top:43%;width:16%;height:13%" data-action="goto:yd1"><span class="pulse-dot"></span><span class="hotspot-label">📖 打开阅读</span></div>
+        <!-- 第3排图标（全部已接入真实页面！）：太疾驰 / 音乐 / 傩·观影 / 傩·游戏 -->
+        <div class="hotspot" style="left:9%;top:60%;width:16%;height:13%" data-action="goto:tjc1"><span class="pulse-dot"></span><span class="hotspot-label">⚡ 打开太疾驰</span></div>
+        <div class="hotspot" style="left:32%;top:60%;width:16%;height:13%" data-action="goto:yy"><span class="pulse-dot"></span><span class="hotspot-label">🎵 打开共听音乐</span></div>
+        <div class="hotspot" style="left:54%;top:60%;width:16%;height:13%" data-action="goto:ngy"><span class="pulse-dot"></span><span class="hotspot-label">🎬 打开傩·观影</span></div>
+        <div class="hotspot" style="left:77%;top:60%;width:16%;height:13%" data-action="goto:nyx"><span class="pulse-dot"></span><span class="hotspot-label">🕹️ 打开傩·游戏</span></div>
+        <!-- 分页圆点：切换到第2页 -->
+        <div class="hotspot" style="left:38%;top:74%;width:24%;height:5%" data-action="goto:home2"><span class="pulse-dot"></span><span class="hotspot-label">👉 翻到桌面第 2 页</span></div>
+        <!-- 底部 Dock（全部已接入真实页面！）：传讯 / 设置 / 游戏 / 商城 -->
+        <div class="hotspot" style="left:11%;top:85%;width:16%;height:12%" data-action="goto:chat"><span class="hotspot-label">💬 传讯</span></div>
+        <div class="hotspot" style="left:33%;top:85%;width:16%;height:12%" data-action="goto:sz1"><span class="pulse-dot"></span><span class="hotspot-label">⚙️ 打开设置</span></div>
+        <div class="hotspot" style="left:54%;top:85%;width:16%;height:12%" data-action="goto:yx1"><span class="pulse-dot"></span><span class="hotspot-label">🎮 休闲一刻·游戏厅</span></div>
+        <div class="hotspot" style="left:75%;top:85%;width:16%;height:12%" data-action="goto:sc1"><span class="pulse-dot"></span><span class="hotspot-label">🛍️ 打开应用商城</span></div>
+      </div>
+
+      <!-- ========== 4B. 主屏幕第1页：天气卡片展开 (主屏幕布局2.png) ========== -->
+      <div class="screen-layer" data-screen="home1_expand">
+        <img class="screen-img" src="assets/home_b.png" alt="折叠式卡片展开" />
+        <div class="hotspot" style="left:5%;top:8%;width:90%;height:62%" data-action="goto:home1">
+          <span class="pulse-dot"></span>
+          <span class="hotspot-label">👆 点击收起折叠卡片</span>
+        </div>
+        <!-- 下方露出的第一排图标同样可点进真实页面 -->
+        <div class="hotspot" style="left:9%;top:72%;width:16%;height:13%" data-action="goto:xyl1"><span class="hotspot-label">🏛️ 绣衣楼</span></div>
+        <div class="hotspot" style="left:32%;top:72%;width:16%;height:13%" data-action="goto:xl1"><span class="hotspot-label">🌿 杏林济生</span></div>
+        <div class="hotspot" style="left:54%;top:72%;width:16%;height:13%" data-action="goto:cp1"><span class="hotspot-label">💗 情侣空间</span></div>
+        <div class="hotspot" style="left:77%;top:72%;width:16%;height:13%" data-action="goto:weather"><span class="hotspot-label">⛅ 天气</span></div>
+      </div>
+
+      <!-- ========== 4C. 主屏幕第2页：商城与自制 (主屏幕布局3.png) ========== -->
+      <div class="screen-layer" data-screen="home2">
+        <img class="screen-img" src="assets/home_c.png" alt="主屏幕第2页" />
+        <div class="hotspot" style="left:9%;top:25%;width:16%;height:13%" data-action="goto:sc1"><span class="pulse-dot"></span><span class="hotspot-label">🛍️ 打开应用商城</span></div>
+        <div class="hotspot" style="left:32%;top:25%;width:16%;height:13%" data-action="goto:ndt"><span class="pulse-dot"></span><span class="hotspot-label">📻 打开傩·电台</span></div>
+        <div class="hotspot" style="left:54%;top:25%;width:16%;height:13%" data-action="app:傩·修业:竹简课案 + B站真实课程看板，名士陪读打卡"><span class="hotspot-label">傩·修业</span></div>
+        <div class="hotspot" style="left:77%;top:25%;width:16%;height:13%" data-action="goto:nzj"><span class="pulse-dot"></span><span class="hotspot-label">🎮 打开傩·掌机</span></div>
+        <div class="hotspot" style="left:9%;top:42%;width:16%;height:13%" data-action="goto:xg1"><span class="pulse-dot"></span><span class="hotspot-label">🏫 打开今日学宫</span></div>
+        <div class="hotspot" style="left:32%;top:42%;width:16%;height:13%" data-action="goto:nyj"><span class="pulse-dot"></span><span class="hotspot-label">🔎 打开傩·云镜</span></div>
+        <div class="hotspot" style="left:54%;top:42%;width:16%;height:13%" data-action="goto:dd1"><span class="pulse-dot"></span><span class="hotspot-label">☕ 打开OC点单</span></div>
+        <div class="hotspot" style="left:38%;top:73%;width:24%;height:6%" data-action="goto:home1"><span class="pulse-dot"></span><span class="hotspot-label">👈 返回桌面第 1 页</span></div>
+        <div class="hotspot" style="left:11%;top:85%;width:16%;height:12%" data-action="goto:chat"><span class="hotspot-label">💬 传讯</span></div>
+        <div class="hotspot" style="left:33%;top:85%;width:16%;height:12%" data-action="goto:sz1"><span class="hotspot-label">⚙️ 设置</span></div>
+        <div class="hotspot" style="left:54%;top:85%;width:16%;height:12%" data-action="goto:yx1"><span class="hotspot-label">🎮 游戏厅</span></div>
+        <div class="hotspot" style="left:75%;top:85%;width:16%;height:12%" data-action="goto:sc1"><span class="hotspot-label">🛍️ 商城</span></div>
+      </div>
+
+      <!-- ========== 5A~5D. 绣衣楼 4 大标签页 (绣衣楼1~4.png) ========== -->
+      <div class="screen-layer" data-screen="xyl1">
+        <img class="screen-img trim-right" src="assets/spy_a.png" alt="绣衣楼-工作台" />
+        <div class="hotspot" style="left:4%;top:2%;width:13%;height:7%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:61%;top:2%;width:11%;height:6%" data-action="app:傅融的办公重地引导:「这九格便是绣衣楼每日运转的命脉——牛会哞，马会叫，牛马会说已收到。」"><span class="hotspot-label">❤️ 傅融引导</span></div>
+        <!-- 顶部黑金今日要闻卡片 -->
+        <div class="hotspot" style="left:5%;top:14%;width:89%;height:27%" data-action="app:绣衣要闻 · 优化伙食支出:傅融呈报：「生吃萝卜降本增效」被四部首座驳回，点开可看密探对线评论或换自定义画作封面！">
+          <span class="pulse-dot"></span>
+          <span class="hotspot-label">📰 查看傅融密报与自定义封面</span>
+        </div>
+        <!-- 九格楼务图标 -->
+        <div class="hotspot" style="left:7%;top:46%;width:17%;height:15%" data-action="app:公告 · 四大板块:绣衣要闻、楼内新规、内外交流、广陵爆报，支持AI现编江湖风声或亲自拟旨"><span class="hotspot-label">📣 公告</span></div>
+        <div class="hotspot" style="left:29%;top:46%;width:17%;height:15%" data-action="app:团体协作:鸢、蛾、蜂、雀四部协同推进大案，实时盯紧各组进度与疲惫值"><span class="hotspot-label">🔗 团体协作</span></div>
+        <div class="hotspot" style="left:50%;top:46%;width:17%;height:15%" data-action="app:绣衣问卷:满意度调查与团建投票，看底下密探写了什么胡话，印纸墨水走公账"><span class="hotspot-label">📋 绣衣问卷</span></div>
+        <div class="hotspot" style="left:72%;top:46%;width:17%;height:15%" data-action="app:假勤 · 卯时点卯:查出勤与摸鱼记录，按楼规记过扣俸或直接拉去「密谈」问责"><span class="hotspot-label">⏰ 假勤</span></div>
+        <div class="hotspot" style="left:7%;top:65%;width:17%;height:15%" data-action="app:审批 · 八类呈报:报销、采购、请假、领物真金白银过目，支持唤出灵犀 AI 代拟折子"><span class="hotspot-label">✅ 审批</span></div>
+        <div class="hotspot" style="left:29%;top:65%;width:17%;height:15%" data-action="app:部门人事 · 绩效考核:限时揪出摸鱼密探算分，同僚在线围观说风凉话"><span class="hotspot-label">👥 部门人事</span></div>
+        <div class="hotspot" style="left:50%;top:65%;width:17%;height:15%" data-action="app:工资单 · 薪精理钱:核验入账与发俸，傅融提醒殿下别忘了批他的涨薪折子"><span class="hotspot-label">💰 工资单</span></div>
+        <div class="hotspot" style="left:72%;top:65%;width:17%;height:15%" data-action="app:楼主预约:丑时至午时求见排期表，申时午休闲人免进"><span class="hotspot-label">🏛️ 楼主预约</span></div>
+        <!-- 底部 4 页签：工作台 / 消息 / 通讯录 / 我的 -->
+        <div class="hotspot" style="left:2%;top:87%;width:22%;height:11%" data-action="goto:xyl1"><span class="hotspot-label">工作台</span></div>
+        <div class="hotspot" style="left:25%;top:87%;width:23%;height:11%" data-action="goto:xyl2"><span class="pulse-dot"></span><span class="hotspot-label">💬 切到「消息」</span></div>
+        <div class="hotspot" style="left:49%;top:87%;width:23%;height:11%" data-action="goto:xyl3"><span class="hotspot-label">📒 切到「通讯录」</span></div>
+        <div class="hotspot" style="left:73%;top:87%;width:23%;height:11%" data-action="goto:xyl4"><span class="hotspot-label">👤 切到「我的」</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="xyl2">
+        <img class="screen-img trim-right" src="assets/spy_b.png" alt="绣衣楼-消息" />
+        <div class="hotspot" style="left:4%;top:2%;width:13%;height:7%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:5%;top:11%;width:89%;height:14%" data-action="app:楼内加密密谈 · 张修:一对一绝密军情传讯，自动联动你在世界书里写下的世道规矩">
+          <span class="pulse-dot"></span>
+          <span class="hotspot-label">✉️ 点开张修加密密谈</span>
+        </div>
+        <div class="hotspot" style="left:2%;top:87%;width:22%;height:11%" data-action="goto:xyl1"><span class="hotspot-label">工作台</span></div>
+        <div class="hotspot" style="left:25%;top:87%;width:23%;height:11%" data-action="goto:xyl2"><span class="hotspot-label">消息</span></div>
+        <div class="hotspot" style="left:49%;top:87%;width:23%;height:11%" data-action="goto:xyl3"><span class="pulse-dot"></span><span class="hotspot-label">📒 切到「通讯录」</span></div>
+        <div class="hotspot" style="left:73%;top:87%;width:23%;height:11%" data-action="goto:xyl4"><span class="hotspot-label">👤 切到「我的」</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="xyl3">
+        <img class="screen-img trim-right" src="assets/spy_c.png" alt="绣衣楼-通讯录" />
+        <div class="hotspot" style="left:4%;top:2%;width:13%;height:7%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:4%;top:13%;width:89%;height:18%" data-action="app:楼内联系人:查看绣衣楼各部门密探名录，支持为每位密探改小传、换画像"><span class="pulse-dot"></span><span class="hotspot-label">👥 楼内联系人名录</span></div>
+        <div class="hotspot" style="left:4%;top:33%;width:89%;height:18%" data-action="app:星标联系人:重点关注的星标心腹，急事一键传召"><span class="hotspot-label">⭐ 星标联系人</span></div>
+        <div class="hotspot" style="left:4%;top:53%;width:89%;height:18%" data-action="app:我的群组:鸢、蛾、蜂、雀四部行动群组与日常水群"><span class="hotspot-label">💬 我的群组</span></div>
+        <div class="hotspot" style="left:4%;top:73%;width:89%;height:13%" data-action="app:服务台:绣衣楼后勤、账房与情报服务专线"><span class="hotspot-label">🎧 服务台</span></div>
+        <div class="hotspot" style="left:2%;top:87%;width:22%;height:11%" data-action="goto:xyl1"><span class="hotspot-label">工作台</span></div>
+        <div class="hotspot" style="left:25%;top:87%;width:23%;height:11%" data-action="goto:xyl2"><span class="hotspot-label">消息</span></div>
+        <div class="hotspot" style="left:49%;top:87%;width:23%;height:11%" data-action="goto:xyl3"><span class="hotspot-label">通讯录</span></div>
+        <div class="hotspot" style="left:73%;top:87%;width:23%;height:11%" data-action="goto:xyl4"><span class="pulse-dot"></span><span class="hotspot-label">👤 切到「我的」</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="xyl4">
+        <img class="screen-img trim-right" src="assets/spy_d.png" alt="绣衣楼-我的" />
+        <div class="hotspot" style="left:4%;top:2%;width:13%;height:7%" data-action="goto:home1"><span class="pulse-dot"></span><span class="hotspot-label">← 返回主屏幕</span></div>
+        <div class="hotspot" style="left:11%;top:45%;width:79%;height:10%" data-action="app:官职名号全楼同步:修改「绣衣楼·楼主」头衔并保存后，全楼顶栏与公文称谓实时同步"><span class="hotspot-label">✍️ 修改官职名号</span></div>
+        <div class="hotspot" style="left:11%;top:58%;width:79%;height:10%" data-action="app:切换配置库身份:一键切换你设好的其他人设马甲卡，在楼内换身份行事"><span class="hotspot-label">🔄 切换配置库身份</span></div>
+        <div class="hotspot" style="left:6%;top:78%;width:88%;height:9%" data-action="app:我的钱包 · 私库密码:按四位密码查私库余额——傅融：「你的钱我一分没乱动，不如先批了我的涨薪折子？」"><span class="pulse-dot"></span><span class="hotspot-label">👛 查看私库钱包</span></div>
+        <div class="hotspot" style="left:2%;top:87%;width:22%;height:11%" data-action="goto:xyl1"><span class="hotspot-label">工作台</span></div>
+        <div class="hotspot" style="left:25%;top:87%;width:23%;height:11%" data-action="goto:xyl2"><span class="hotspot-label">消息</span></div>
+        <div class="hotspot" style="left:49%;top:87%;width:23%;height:11%" data-action="goto:xyl3"><span class="hotspot-label">通讯录</span></div>
+        <div class="hotspot" style="left:73%;top:87%;width:23%;height:11%" data-action="goto:xyl4"><span class="hotspot-label">我的</span></div>
+      </div>
+
+      <!-- ========== 6A~6B. 杏林济生 (杏林济生.png & 杏林济生2.png) ========== -->
+      <div class="screen-layer" data-screen="xl1">
+        <img class="screen-img trim-right" src="assets/clinic_a.png" alt="杏林济生-问诊选择" />
+        <div class="hotspot" style="left:4%;top:0%;width:18%;height:8%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <!-- 八大病症胶囊（点击任意病症直接挂号进入排表） -->
+        <div class="hotspot" style="left:5%;top:51%;width:90%;height:28%" data-action="goto:xl2">
+          <span class="pulse-dot"></span>
+          <span class="hotspot-label">💊 点击病症并挂号问诊</span>
+        </div>
+        <!-- 底部绿色「选好了 >」按钮 -->
+        <div class="hotspot" style="left:6%;top:80%;width:88%;height:11%" data-action="goto:xl2">
+          <span class="pulse-dot"></span>
+          <span class="hotspot-label">✅ 选好了 · 立即挂号</span>
+        </div>
+      </div>
+
+      <div class="screen-layer" data-screen="xl2">
+        <img class="screen-img" src="assets/clinic_b.png" alt="杏林济生-挂号排表" />
+        <div class="hotspot" style="left:4%;top:0%;width:18%;height:9%" data-action="goto:home1"><span class="pulse-dot"></span><span class="hotspot-label">← 返回主屏幕</span></div>
+        <!-- 华佗坐诊与候诊排表 -->
+        <div class="hotspot" style="left:16%;top:13%;width:68%;height:64%" data-action="app:华佗坐诊 · 实时候诊排表:前面还有蒯良（虚损）、士燮（风寒）、程普（气促）、张修（虚损）排队中；问诊后可直通「煎药台」抓药煎煮！">
+          <span class="pulse-dot"></span>
+          <span class="hotspot-label">🩺 查看华佗问诊与煎药台联动</span>
+        </div>
+        <!-- 底部返回重新选择 -->
+        <div class="hotspot" style="left:17%;top:83%;width:66%;height:12%" data-action="goto:xl1"><span class="hotspot-label">↩ 返回重新选择病症</span></div>
+      </div>
+
+      <!-- ========== 7A~7B. 情侣空间 (情侣空间1.png & 情侣空间2.png) ========== -->
+      <div class="screen-layer" data-screen="cp1">
+        <img class="screen-img trim-right" src="assets/couple_a.png" alt="情侣空间-第1页" />
+        <div class="hotspot" style="left:3%;top:1%;width:18%;height:8%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <!-- 顶部双人头像 / 相伴天数 / 热恋中胶囊 -->
+        <div class="hotspot" style="left:5%;top:10%;width:88%;height:36%" data-action="app:袁基 × 广陵王 · 纪念日主卡:支持切换伴侣名士、修改相伴天数、切换交往状态（热恋中/同居中/执手偕老/相思暗涌）并自动联动日历重要日子！">
+          <span class="hotspot-label">💑 伴侣切换 & 交往状态胶囊</span>
+        </div>
+        <!-- 第1页 8 宫格玩法 -->
+        <div class="hotspot" style="left:6%;top:51%;width:20%;height:21%" data-action="app:与你相伴 · 专注陪伴:设定任务与时长，可选「安静陪伴」或每隔5分钟袁基主动搭话的「言语陪伴」"><span class="hotspot-label">💗 与你相伴</span></div>
+        <div class="hotspot" style="left:27%;top:51%;width:20%;height:21%" data-action="app:任务拆解:把犯愁的大差事交给袁基，AI一步步拆成轻松小目标陪你做完"><span class="hotspot-label">☑️ 任务拆解</span></div>
+        <div class="hotspot" style="left:48%;top:51%;width:20%;height:21%" data-action="app:共同记账:记录你们的银钱往来、收支统计与甜食红蓼酒花销"><span class="hotspot-label">🪙 共同记账</span></div>
+        <div class="hotspot" style="left:69%;top:51%;width:20%;height:21%" data-action="app:愿望清单:写下夜市闲逛、冬日赏雪、放纸鸢等双人心愿，实现一条点亮一条"><span class="hotspot-label">⭐ 愿望清单</span></div>
+        <div class="hotspot" style="left:6%;top:73%;width:20%;height:21%" data-action="app:我问你猜:双人趣味问答与默契大考验，带历史积分榜"><span class="hotspot-label">❓ 我问你猜</span></div>
+        <div class="hotspot" style="left:27%;top:73%;width:20%;height:21%" data-action="app:我画你猜:手绘涂鸦画板 + 袁基实时猜词，战绩收录入「丹青谱」"><span class="hotspot-label">🖌️ 我画你猜</span></div>
+        <div class="hotspot" style="left:48%;top:73%;width:20%;height:21%" data-action="app:飞花传令:限定令字诗词接龙对弈，输了的人罚酒一杯"><span class="hotspot-label">🪷 飞花传令</span></div>
+        <div class="hotspot" style="left:69%;top:73%;width:20%;height:21%" data-action="app:旧日食谱:对接百味库，按袁基口味下厨并附上悄悄话，触发专属食评"><span class="hotspot-label">🍲 旧日食谱</span></div>
+        <!-- 底部指示器 / 右侧悬浮球切换到第2页 -->
+        <div class="hotspot" style="left:35%;top:94%;width:30%;height:6%" data-action="goto:cp2"><span class="pulse-dot"></span><span class="hotspot-label">👉 翻到第 2 页三大重头玩法</span></div>
+        <div class="hotspot" style="right:0%;top:74%;width:12%;height:14%" data-action="goto:cp2"><span class="pulse-dot"></span><span class="hotspot-label">👉 下一页</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="cp2">
+        <img class="screen-img trim-right" src="assets/couple_b.png" alt="情侣空间-第2页" />
+        <div class="hotspot" style="left:3%;top:1%;width:18%;height:8%" data-action="goto:home1"><span class="pulse-dot"></span><span class="hotspot-label">← 返回主屏幕</span></div>
+        <!-- 第2页三大独立组件 -->
+        <div class="hotspot" style="left:7%;top:52%;width:19%;height:42%" data-action="app:👣 府邸捉迷藏（贝叶斯听声辨位）:设定赌注与藏身房间，实时移动、搜寻、屏息博弈，结算战绩可一键写入情侣手账！">
+          <span class="pulse-dot"></span>
+          <span class="hotspot-label">👣 府邸捉迷藏</span>
+        </div>
+        <div class="hotspot" style="left:27%;top:52%;width:19%;height:42%" data-action="app:📖 手账达人（Turn.js 14页物理翻页）:真实书页边角翻动，支持画笔、贴纸、换封面，还能请袁基提笔题跋写情话！">
+          <span class="pulse-dot"></span>
+          <span class="hotspot-label">📖 手账达人</span>
+        </div>
+        <div class="hotspot" style="left:48%;top:52%;width:19%;height:42%" data-action="app:🎲 风月传说（双人棋盘对弈）:自定义口味尺度与秘密身份牌，掷骰推进触发亲密双人任务！">
+          <span class="pulse-dot"></span>
+          <span class="hotspot-label">🎲 风月传说</span>
+        </div>
+        <!-- 底部指示器切回第1页 -->
+        <div class="hotspot" style="left:35%;top:94%;width:30%;height:6%" data-action="goto:cp1"><span class="hotspot-label">👈 返回第 1 页八宫格</span></div>
+      </div>
+
+      <!-- ========== 8. 天气 (天气.png) ========== -->
+      <div class="screen-layer" data-screen="weather">
+        <img class="screen-img" src="assets/weather.png" alt="天气" />
+        <div class="hotspot" style="left:1%;top:0%;width:19%;height:7%" data-action="goto:home1"><span class="pulse-dot"></span><span class="hotspot-label">← 返回主屏幕</span></div>
+        <div class="hotspot" style="left:16%;top:17%;width:22%;height:17%" data-action="app:广陵 · 本地物候:当前 10°C 清冷，桌面折叠卡片会自动生成名士添衣叮嘱"><span class="hotspot-label">📍 广陵天气</span></div>
+        <div class="hotspot" style="left:56%;top:17%;width:30%;height:17%" data-action="app:袁基 · 洛阳市实时连线:同步查看袁基所在地的气温、日出日落（17:25）与异地牵挂提示！">
+          <span class="pulse-dot"></span>
+          <span class="hotspot-label">🍵 袁基 · 洛阳市天气</span>
+        </div>
+        <div class="hotspot" style="left:6%;top:40%;width:87%;height:42%" data-action="app:双城日落与温差看板:10°C 实时温度 + 17:25 日落时刻，底部还能对照「TA的」与「我的」物候"><span class="hotspot-label">🌅 查看日落与双城温差</span></div>
+      </div>
+
+      <!-- ========== 9A~9D. 太疾驰 4 大标签页交互 (太疾驰1~4.png) ========== -->
+      <div class="screen-layer" data-screen="tjc1">
+        <img class="screen-img trim-right" src="assets/order_a.png" alt="太疾驰-餐饮" />
+        <div class="hotspot" style="left:4%;top:0%;width:17%;height:7%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:66%;top:8%;width:24%;height:6%" data-action="app:太疾驰福券卡包:拆财神红包必得五铢钱、满100减30食券与神砍一刀券"><span class="hotspot-label">🎫 福券卡包</span></div>
+        <div class="hotspot" style="left:2%;top:86%;width:17%;height:12%" data-action="goto:tjc1"><span class="hotspot-label">🍜 餐饮</span></div>
+        <div class="hotspot" style="left:19%;top:86%;width:18%;height:12%" data-action="goto:tjc2"><span class="pulse-dot"></span><span class="hotspot-label">🛍️ 购物</span></div>
+        <div class="hotspot" style="left:38%;top:80%;width:21%;height:15%;border-radius:50%" data-action="modal:pay"><span class="pulse-dot"></span><span class="hotspot-label">元 · 结算/找袁基代付</span></div>
+        <div class="hotspot" style="left:60%;top:86%;width:18%;height:12%" data-action="goto:tjc3"><span class="hotspot-label">🏺 二手</span></div>
+        <div class="hotspot" style="left:79%;top:86%;width:18%;height:12%" data-action="goto:tjc4"><span class="hotspot-label">🎟️ 抢票</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="tjc2">
+        <img class="screen-img trim-right" src="assets/order_b.png" alt="太疾驰-购物" />
+        <div class="hotspot" style="left:4%;top:0%;width:17%;height:7%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:2%;top:86%;width:17%;height:12%" data-action="goto:tjc1"><span class="hotspot-label">🍜 餐饮</span></div>
+        <div class="hotspot" style="left:19%;top:86%;width:18%;height:12%" data-action="goto:tjc2"><span class="hotspot-label">🛍️ 购物</span></div>
+        <div class="hotspot" style="left:38%;top:80%;width:21%;height:15%;border-radius:50%" data-action="modal:pay"><span class="hotspot-label">元 · 结算/代付</span></div>
+        <div class="hotspot" style="left:60%;top:86%;width:18%;height:12%" data-action="goto:tjc3"><span class="pulse-dot"></span><span class="hotspot-label">🏺 二手集市</span></div>
+        <div class="hotspot" style="left:79%;top:86%;width:18%;height:12%" data-action="goto:tjc4"><span class="hotspot-label">🎟️ 抢票</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="tjc3">
+        <img class="screen-img trim-right" src="assets/order_c.png" alt="太疾驰-二手" />
+        <div class="hotspot" style="left:4%;top:0%;width:17%;height:7%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:8%;top:4%;width:84%;height:12%" data-action="app:财神红包 · 三选一锦囊:必掉五铢钱 + 满减券/神砍一刀券，还能看名士手气榜！"><span class="pulse-dot"></span><span class="hotspot-label">🧧 拆三选一锦囊</span></div>
+        <div class="hotspot" style="left:2%;top:86%;width:17%;height:12%" data-action="goto:tjc1"><span class="hotspot-label">🍜 餐饮</span></div>
+        <div class="hotspot" style="left:19%;top:86%;width:18%;height:12%" data-action="goto:tjc2"><span class="hotspot-label">🛍️ 购物</span></div>
+        <div class="hotspot" style="left:38%;top:80%;width:21%;height:15%;border-radius:50%" data-action="modal:pay"><span class="hotspot-label">元 · 结算/代付</span></div>
+        <div class="hotspot" style="left:60%;top:86%;width:18%;height:12%" data-action="goto:tjc3"><span class="hotspot-label">🏺 二手</span></div>
+        <div class="hotspot" style="left:79%;top:86%;width:18%;height:12%" data-action="goto:tjc4"><span class="pulse-dot"></span><span class="hotspot-label">🎟️ 戏楼抢票</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="tjc4">
+        <img class="screen-img trim-right" src="assets/order_d.png" alt="太疾驰-抢票" />
+        <div class="hotspot" style="left:4%;top:0%;width:17%;height:7%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:2%;top:86%;width:17%;height:12%" data-action="goto:tjc1"><span class="hotspot-label">🍜 餐饮</span></div>
+        <div class="hotspot" style="left:19%;top:86%;width:18%;height:12%" data-action="goto:tjc2"><span class="hotspot-label">🛍️ 购物</span></div>
+        <div class="hotspot" style="left:38%;top:80%;width:21%;height:15%;border-radius:50%" data-action="modal:pay"><span class="pulse-dot"></span><span class="hotspot-label">元 · 结算/找袁基代付</span></div>
+        <div class="hotspot" style="left:60%;top:86%;width:18%;height:12%" data-action="goto:tjc3"><span class="hotspot-label">🏺 二手</span></div>
+        <div class="hotspot" style="left:79%;top:86%;width:18%;height:12%" data-action="goto:tjc4"><span class="hotspot-label">🎟️ 抢票</span></div>
+      </div>
+
+      <!-- 太疾驰「元」结算/代付弹窗 -->
+      <div class="modal-mask" id="pay-modal">
+        <div class="pay-sheet">
+          <div class="pay-head">
+            <b>🧾 太疾驰 · 结算单汇总</b>
+            <span class="pay-close" id="pay-close">关闭 ✕</span>
+          </div>
+          <div class="pay-item"><span>☕ 瑞杏 XING（荔枝咖啡 + 烤黑糖波波）</span><em>49 钱</em></div>
+          <div class="pay-item"><span>🍯 青州特产杏子蜜饯 + 会稽山茯苓块</span><em>120 钱</em></div>
+          <div class="pay-item"><span>🎭 岁星日 · 乐舞雅座戏票（已锁座入日历）</span><em>80 钱</em></div>
+          <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);padding:4px 4px">
+            <span>已用「满100减30福券」</span><b style="color:var(--olive-d);font-size:14px">合计：219 钱</b>
+          </div>
+          <div class="pay-btns">
+            <div class="pay-btn" id="btn-self-pay">自己五铢钱支付</div>
+            <div class="pay-btn pri" id="btn-ta-pay">🕊️ 飞鸽传书 · 找袁基代付</div>
+          </div>
+          <div class="pay-status" id="pay-status"></div>
+        </div>
+      </div>
+
+      <!-- ========== 11A~11D. 论坛 (论坛1~4.png) ========== -->
+      <div class="screen-layer" data-screen="lt1">
+        <img class="screen-img" src="assets/forum_a.png" alt="论坛-主页一览" />
+        <div class="hotspot" style="left:0%;top:2%;width:30%;height:10%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:4%;top:16%;width:92%;height:28%" data-action="goto:lt4"><span class="pulse-dot"></span><span class="hotspot-label">✨ 加入兴趣圈 · 去袁基超话</span></div>
+        <div class="hotspot" style="left:2%;top:58%;width:95%;height:26%" data-action="goto:lt2"><span class="hotspot-label">🔥 查看话题名人榜</span></div>
+        <!-- 底部 4 页签：主页 / 名人榜 / 关系网 / 超话圈 -->
+        <div class="hotspot" style="left:2%;top:86%;width:22%;height:12%" data-action="goto:lt1"><span class="hotspot-label">🏠 主页</span></div>
+        <div class="hotspot" style="left:25%;top:86%;width:24%;height:12%" data-action="goto:lt2"><span class="pulse-dot"></span><span class="hotspot-label">🔥 话题名人榜</span></div>
+        <div class="hotspot" style="left:50%;top:86%;width:24%;height:12%" data-action="goto:lt3"><span class="hotspot-label">🕸️ 关系网</span></div>
+        <div class="hotspot" style="left:75%;top:86%;width:23%;height:12%" data-action="goto:lt4"><span class="hotspot-label"># 超话圈</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="lt2">
+        <img class="screen-img trim-right" src="assets/forum_b.png" alt="论坛-话题名人榜" />
+        <div class="hotspot" style="left:2%;top:3%;width:38%;height:9%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:4%;top:16%;width:89%;height:16%" data-action="app:热搜 #1 · 张绣（98.6万 爆）:#暴戾张绣与我街头同框疑关系破冰# —— 由你的「关系网」实时触发生成！"><span class="hotspot-label">🔥 张绣热搜详情</span></div>
+        <div class="hotspot" style="left:4%;top:33%;width:89%;height:16%" data-action="app:热搜 #2 · 甘宁（87.4万 爆）:#甘宁广陵夜巡吹裂脸急求面脂方# —— 评论区全在推荐太疾驰好物"><span class="hotspot-label">🔥 甘宁热搜详情</span></div>
+        <div class="hotspot" style="left:4%;top:50%;width:89%;height:32%" data-action="app:关系网动态热搜榜:张郃（64.2万 沸）、孙策（61.8万 热）、张辽（52.9万 热）都会随互动实时上榜！"><span class="hotspot-label">🔥 查看更多名士热搜</span></div>
+        <div class="hotspot" style="left:2%;top:86%;width:22%;height:12%" data-action="goto:lt1"><span class="hotspot-label">🏠 主页</span></div>
+        <div class="hotspot" style="left:25%;top:86%;width:24%;height:12%" data-action="goto:lt2"><span class="hotspot-label">🔥 名人榜</span></div>
+        <div class="hotspot" style="left:50%;top:86%;width:24%;height:12%" data-action="goto:lt3"><span class="pulse-dot"></span><span class="hotspot-label">🕸️ 查看关系网</span></div>
+        <div class="hotspot" style="left:75%;top:86%;width:23%;height:12%" data-action="goto:lt4"><span class="hotspot-label"># 超话圈</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="lt3">
+        <img class="screen-img" src="assets/forum_c.png" alt="论坛-关系网" />
+        <div class="hotspot" style="left:5%;top:1%;width:90%;height:15%" data-action="app:精选同人帖:【织物】想给张飞将军绣个剑穗，请问大家用什么丝线配色更好？"><span class="hotspot-label">⭐ 查看帖子</span></div>
+        <div class="hotspot" style="left:36%;top:22%;width:60%;height:8%" data-action="app:动态关系网图谱:支持居中、导入、AI 刷新与自定义编辑，关系变化会直接触发论坛热搜词条！"><span class="hotspot-label">🕸️ 关系网编辑工具</span></div>
+        <div class="hotspot" style="left:30%;top:84%;width:22%;height:15%" data-action="goto:lt4"><span class="pulse-dot"></span><span class="hotspot-label">🍵 点击袁基节点进超话</span></div>
+        <div class="hotspot" style="left:6%;top:35%;width:88%;height:48%" data-action="app:广陵王人际星图:当前已相连：左慈、张郃、刘辩、孙策、张邈、袁基、张绣、张辽！"><span class="hotspot-label">🕸️ 广陵王关系星图</span></div>
+        <div class="unlock-bar" style="bottom:12px;font-size:11px;padding:6px 14px" data-action="goto:lt4">去「袁基超话圈 #」 ›</div>
+      </div>
+
+      <div class="screen-layer" data-screen="lt4">
+        <img class="screen-img" src="assets/forum_d.png" alt="论坛-袁基超话圈" />
+        <div class="hotspot" style="left:2%;top:1%;width:14%;height:7%" data-action="goto:home1"><span class="pulse-dot"></span><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:5%;top:27%;width:90%;height:47%" data-action="app:❤️ 点赞 +1（539） · 颜粉头子热帖:「有洁癖的长公子肯为你踩泥泞，明明知道他是提前算准路线蹲点‘偶遇’，谁能忍住不心软啊！」"><span class="pulse-dot"></span><span class="hotspot-label">❤️ 点赞袁基超话热帖</span></div>
+        <div class="hotspot" style="left:5%;top:77%;width:90%;height:16%" data-action="app:考据党深扒贴:《细思极恐！深扒袁太仆从兰台到董卓帐下的履历》—— 评论区已盖楼百层"><span class="hotspot-label">📜 看考据党长文</span></div>
+        <div class="hotspot" style="left:2%;top:93%;width:96%;height:7%" data-action="goto:lt1"><span class="hotspot-label">↩ 返回论坛主页</span></div>
+      </div>
+
+      <!-- ========== 12A~12D. 日历 (日历1~4.png) ========== -->
+      <div class="screen-layer" data-screen="rl1">
+        <img class="screen-img" src="assets/cal_a.png" alt="日历-袁基的日程" />
+        <div class="hotspot" style="left:3%;top:0%;width:18%;height:7%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:8%;top:48%;width:80%;height:12%" data-action="app:袁基的 AI 日程手账:支持一键「刷新AI日程」、切回「我的手账」或「切换名士」查看不同名士的私密排期！"><span class="hotspot-label">🔄 刷新AI日程 / 切换名士</span></div>
+        <!-- 1日 / 10日 / 18日 分别跳到 已毕 / 进行 / 未竟 -->
+        <div class="hotspot" style="left:9%;top:74%;width:16%;height:9%" data-action="goto:rl2"><span class="pulse-dot"></span><span class="hotspot-label">1日 · 已毕之事</span></div>
+        <div class="hotspot" style="left:32%;top:82%;width:15%;height:9%" data-action="goto:rl3"><span class="pulse-dot"></span><span class="hotspot-label">10日 · 进行之事</span></div>
+        <div class="hotspot" style="left:44%;top:90%;width:15%;height:9%" data-action="goto:rl4"><span class="pulse-dot"></span><span class="hotspot-label">18日 · 未竟之事</span></div>
+        <div class="hotspot" style="left:58%;top:73%;width:32%;height:24%" data-action="goto:rl2"><span class="hotspot-label">📅 查看本月袁基日程</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="rl2">
+        <img class="screen-img" src="assets/cal_b.png" alt="日历-已毕之事" />
+        <div class="hotspot" style="left:3%;top:4%;width:31%;height:19%" data-action="goto:rl2"><span class="hotspot-label">已毕之事</span></div>
+        <div class="hotspot" style="left:36%;top:4%;width:29%;height:19%" data-action="goto:rl3"><span class="pulse-dot"></span><span class="hotspot-label">👉 切到「进行之事」</span></div>
+        <div class="hotspot" style="left:66%;top:4%;width:29%;height:19%" data-action="goto:rl4"><span class="hotspot-label">切到「未竟之事」</span></div>
+        <div class="hotspot" style="left:5%;top:29%;width:89%;height:61%" data-action="app:1日 05:30~08:30 · 整肃车驾赴朝会:「晨起盥手敷粉，依旧作那副温良退让的袁氏长公子模样，顺手将各家递来的消息收拢袖中。」"><span class="hotspot-label">📜 袁基朝会手记</span></div>
+        <div class="unlock-bar" style="bottom:12px;font-size:11px;padding:6px 14px" data-action="goto:rl1">← 返回月历总览</div>
+      </div>
+
+      <div class="screen-layer" data-screen="rl3">
+        <img class="screen-img" src="assets/cal_c.png" alt="日历-进行之事" />
+        <div class="hotspot" style="left:3%;top:5%;width:30%;height:19%" data-action="goto:rl2"><span class="hotspot-label">已毕之事</span></div>
+        <div class="hotspot" style="left:34%;top:5%;width:32%;height:19%" data-action="goto:rl3"><span class="hotspot-label">进行之事</span></div>
+        <div class="hotspot" style="left:67%;top:5%;width:29%;height:19%" data-action="goto:rl4"><span class="pulse-dot"></span><span class="hotspot-label">👉 切到「未竟之事」</span></div>
+        <div class="hotspot" style="left:4%;top:30%;width:92%;height:50%" data-action="app:10日 23:00~01:30 · 客舍夜烛批阅密信:「既被殿下抓个正着，少不得要温声反问一句，殿下此刻又缘何未眠？」"><span class="hotspot-label">🕯️ 夜烛批阅密信</span></div>
+        <div class="unlock-bar" style="bottom:12px;font-size:11px;padding:6px 14px" data-action="goto:rl1">← 返回月历总览</div>
+      </div>
+
+      <div class="screen-layer" data-screen="rl4">
+        <img class="screen-img" src="assets/cal_d.png" alt="日历-未竟之事" />
+        <div class="hotspot" style="left:3%;top:0%;width:18%;height:7%" data-action="goto:home1"><span class="pulse-dot"></span><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:5%;top:21%;width:28%;height:15%" data-action="goto:rl2"><span class="hotspot-label">已毕之事</span></div>
+        <div class="hotspot" style="left:35%;top:21%;width:28%;height:15%" data-action="goto:rl3"><span class="hotspot-label">进行之事</span></div>
+        <div class="hotspot" style="left:64%;top:21%;width:31%;height:15%" data-action="goto:rl4"><span class="hotspot-label">未竟之事</span></div>
+        <div class="hotspot" style="left:5%;top:41%;width:90%;height:48%" data-action="app:18日 19:00~21:30 · 雅集抚琴与验看弓弦:「装一装袁氏的门面——只是议事走神时，许又要忍不住在纸角摹画殿下的小像了。」底下还有温泉夜弈共话盟约！"><span class="hotspot-label">😈 袁基的小心思日程</span></div>
+      </div>
+
+      <!-- ========== 13A~13B. 阅读 (1.png & 阅读2.png) ========== -->
+      <div class="screen-layer" data-screen="yd1">
+        <img class="screen-img" src="assets/pic1.png" alt="今日阅读" />
+        <div class="hotspot" style="left:6%;top:0%;width:18%;height:8%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:33%;top:0%;width:34%;height:8%" data-action="goto:yd2"><span class="pulse-dot"></span><span class="hotspot-label">📚 切到「天下书城」</span></div>
+        <div class="hotspot" style="left:75%;top:69%;width:18%;height:11%;border-radius:50%" data-action="goto:yd2"><span class="pulse-dot"></span><span class="hotspot-label">✨ 去天下书城</span></div>
+        <div class="hotspot" style="left:8%;top:80%;width:84%;height:15%" data-action="app:📖 进入沉浸阅读器:支持导入本地 EPUB / TXT 典籍、章节目录直达、宣纸/豆沙/古卷/夜读四色护眼底色，还能挑一位名士为你掌灯伴读！"><span class="hotspot-label">📖 开始阅读 & 名士伴读</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="yd2">
+        <img class="screen-img trim-right" src="assets/read_b.png" alt="天下书城" />
+        <div class="hotspot" style="left:3%;top:0%;width:18%;height:6%" data-action="goto:home1"><span class="pulse-dot"></span><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:30%;top:0%;width:34%;height:6%" data-action="goto:yd1"><span class="hotspot-label">切回「今日阅读」</span></div>
+        <div class="hotspot" style="left:5%;top:37%;width:88%;height:42%" data-action="app:天下书城 · 精选话本:《绣衣楼风华录》（小乔·言情）、《无毒不丈夫：贾诩…》（兵法/传记）—— 支持一键换一批与收藏进藏书阁！"><span class="hotspot-label">📚 查看书城推荐话本</span></div>
+        <div class="hotspot" style="left:53%;top:83%;width:32%;height:12%" data-action="goto:yd1"><span class="pulse-dot"></span><span class="hotspot-label">📖 切回「藏书阁」</span></div>
+      </div>
+
+      <!-- ========== 14. 共听音乐 (音乐.png) ========== -->
+      <div class="screen-layer" data-screen="yy">
+        <img class="screen-img" src="assets/music.png" alt="共听音乐" />
+        <div class="hotspot" style="left:3%;top:0%;width:11%;height:6%" data-action="goto:home1"><span class="pulse-dot"></span><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:6%;top:23%;width:43%;height:12%" data-action="app:广陵王发送共听弹幕:『这曲《金杯共饮》配夜雨真绝！』—— 支持边听歌边与袁基实时聊歌词"><span class="hotspot-label">💬 点击输入想说的话</span></div>
+        <div class="hotspot" style="left:52%;top:23%;width:42%;height:12%" data-action="app:袁基共听回应:「歌不错，点我开始聊天吧。既与殿下金杯共饮，这一曲便该由袁某替殿下斟满。」"><span class="pulse-dot"></span><span class="hotspot-label">🍵 点袁基开始共听聊天</span></div>
+        <div class="hotspot" style="left:10%;top:84%;width:80%;height:15%" data-action="app:🎵 正在播放《金杯共饮 - 代号鸢》:支持歌单切换、-0.5s/+0.5s 歌词时间轴微调与自定义贴词！"><span class="hotspot-label">▶ 播放控制与贴词</span></div>
+      </div>
+
+      <!-- ========== 15. 傩·观影 (傩·观影.png) ========== -->
+      <div class="screen-layer" data-screen="ngy">
+        <img class="screen-img" src="assets/nuo_film.png" alt="傩·观影" />
+        <div class="hotspot" style="left:1%;top:1%;width:15%;height:6%" data-action="goto:home1"><span class="pulse-dot"></span><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:76%;top:1%;width:21%;height:6%" data-action="app:+ 录票 · 民国胶卷放映室:记录你看过的每一部电影，自动生成胶卷齿孔质感专属票根！"><span class="hotspot-label">🎟️ 录入新票根</span></div>
+        <div class="hotspot" style="left:54%;top:10%;width:42%;height:6%" data-action="app:✨ 听听「袁基」看什么:AI 结合袁基心境与 JustWatch 自动搜片，生成符合人设的深度影评札记！"><span class="pulse-dot"></span><span class="hotspot-label">✨ 听听袁基推片</span></div>
+        <div class="hotspot" style="left:3%;top:25%;width:94%;height:10%" data-action="app:观影时空盘:已放映 6 部 · 穿梭 13.7 小时 · 均分 9.3！一键查看你们的年度观影偏好罗盘"><span class="hotspot-label">📊 查看观影时空盘</span></div>
+        <div class="hotspot" style="left:3%;top:46%;width:94%;height:46%" data-action="app:袁基·评《罗生门 (1950)》:「雾里看花，看的原是人自己的心。殿下素来慧眼如炬，不知可愿陪在下在这雨夜破庙里，再赌一回人心真假？」"><span class="hotspot-label">🎬 阅读袁基《罗生门》影评</span></div>
+      </div>
+
+      <!-- ========== 16. 傩·游戏 (傩·游戏.png) ========== -->
+      <div class="screen-layer" data-screen="nyx">
+        <img class="screen-img trim-right" src="assets/nuo_game.png" alt="傩·游戏" />
+        <div class="hotspot" style="left:1%;top:1%;width:15%;height:6%" data-action="goto:home1"><span class="pulse-dot"></span><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:73%;top:1%;width:21%;height:6%" data-action="app:+ 录卡 · 复古卡带游戏仓:录入想玩/在玩游戏，自动静默抓取 Steam / iTunes 官方高清封面！"><span class="hotspot-label">🕹️ 录入游戏卡带</span></div>
+        <div class="hotspot" style="left:49%;top:10%;width:45%;height:6%" data-action="app:✨ 看看「袁基」在玩什么:袁基已玩《全面战争：三国》137.5小时（9.1分）+《文明VI》，满脑子都是先手推演！"><span class="pulse-dot"></span><span class="hotspot-label">✨ 看袁基在玩什么</span></div>
+        <div class="hotspot" style="left:2%;top:25%;width:91%;height:10%" data-action="app:电竞时空罗盘:藏卡 10 款 · 累计 672.5 小时 · 通关率 43% · 最佳搭子：刘辩！"><span class="hotspot-label">🧭 查看电竞时空罗盘</span></div>
+        <div class="hotspot" style="left:2%;top:45%;width:91%;height:38%" data-action="app:袁基评《全面战争：三国》:「殿下，偶遇。此局权谋，袁氏长公子岂敢不沉迷？在下已百小时推演，唯恐失了先手。」支持一键切换在玩/想玩/通关/封盘！"><span class="hotspot-label">🎮 袁基 137.5h 权谋速评</span></div>
+      </div>
+
+      <!-- ========== 17A~17B. 设置 (设置1.png & 设置2.png) ========== -->
+      <div class="screen-layer" data-screen="sz1">
+        <img class="screen-img trim-right" src="assets/settings_a.png" alt="设置-顶部" />
+        <div class="hotspot" style="left:4%;top:0%;width:18%;height:9%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:5%;top:13%;width:87%;height:23%" data-action="app:广陵王（20岁）个人档案:自定义玩家头像、昵称、人设身份与年龄，同步全机称谓"><span class="hotspot-label">👤 玩家人设档案</span></div>
+        <div class="hotspot" style="left:5%;top:40%;width:87%;height:12%" data-action="app:API 配置中枢:自备接口密钥，支持多模型自由切换与一键测速"><span class="hotspot-label">🔌 API 配置</span></div>
+        <div class="hotspot" style="left:5%;top:53%;width:87%;height:12%" data-action="app:世界书设置:管理全局世界观与角色设定书，联动传讯、绣衣楼与各子应用"><span class="hotspot-label">📚 世界书设置</span></div>
+        <div class="hotspot" style="left:5%;top:74%;width:87%;height:13%" data-action="goto:lock_diy1"><span class="pulse-dot"></span><span class="hotspot-label">🎨 直达锁屏装扮设置</span></div>
+        <div class="unlock-bar" style="bottom:10px;font-size:11px;padding:6px 14px" data-action="goto:sz2">↓ 下滑看主题与长期记忆</div>
+      </div>
+
+      <div class="screen-layer" data-screen="sz2">
+        <img class="screen-img" src="assets/settings_b.png" alt="设置-进阶配置" />
+        <div class="hotspot" style="left:4%;top:0%;width:18%;height:9%" data-action="goto:home1"><span class="pulse-dot"></span><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:4%;top:11%;width:92%;height:11%" data-action="goto:lock_diy1"><span class="hotspot-label">🎨 锁屏装扮设置</span></div>
+        <div class="hotspot" style="left:4%;top:25%;width:92%;height:34%" data-action="app:字体 · 主题 · 世界书:支持全局字体切换、自定义主题配色与多本世界书挂载"><span class="hotspot-label">🎨 字体与主题设置</span></div>
+        <div class="hotspot" style="left:4%;top:68%;width:92%;height:12%" data-action="app:⚡ 长期记忆引擎:自动沉淀你与袁基的每一次聊天、约定与事件，越聊越懂你！"><span class="pulse-dot"></span><span class="hotspot-label">⚡ 长期记忆库</span></div>
+        <div class="hotspot" style="left:4%;top:81%;width:92%;height:12%" data-action="app:🔔 通知与状态:自定义顶部消息横幅弹窗与名士主动发消息频率"><span class="hotspot-label">🔔 通知与状态</span></div>
+        <div class="unlock-bar" style="bottom:10px;font-size:11px;padding:6px 14px" data-action="goto:sz1">↑ 回到设置顶部</div>
+      </div>
+
+      <!-- ========== 18A~18C. 休闲一刻·游戏厅 (游戏1~3.png) ========== -->
+      <div class="screen-layer" data-screen="yx1">
+        <img class="screen-img trim-right" src="assets/game_a.png" alt="休闲一刻-游戏" />
+        <div class="hotspot" style="left:3%;top:2%;width:22%;height:9%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:4%;top:32%;width:27%;height:13%" data-action="goto:yx1"><span class="hotspot-label">🎮 游戏</span></div>
+        <div class="hotspot" style="left:34%;top:32%;width:27%;height:13%" data-action="goto:yx2"><span class="pulse-dot"></span><span class="hotspot-label">🔧 切到「工具」</span></div>
+        <div class="hotspot" style="left:64%;top:32%;width:27%;height:13%" data-action="goto:yx3"><span class="hotspot-label">✨ 切到「其他」</span></div>
+        <div class="hotspot" style="left:5%;top:50%;width:87%;height:28%" data-action="goto:xw1"><span class="pulse-dot"></span><span class="hotspot-label">⚔️ 进入修武扬文（3页小游戏）</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="yx2">
+        <img class="screen-img trim-right" src="assets/game_b.png" alt="休闲一刻-工具" />
+        <div class="hotspot" style="left:4%;top:10%;width:27%;height:13%" data-action="goto:yx1"><span class="hotspot-label">🎮 游戏</span></div>
+        <div class="hotspot" style="left:35%;top:10%;width:27%;height:13%" data-action="goto:yx2"><span class="hotspot-label">🔧 工具</span></div>
+        <div class="hotspot" style="left:65%;top:10%;width:27%;height:13%" data-action="goto:yx3"><span class="pulse-dot"></span><span class="hotspot-label">✨ 切到「其他」</span></div>
+        <div class="hotspot" style="left:5%;top:28%;width:87%;height:26%" data-action="app:📊 州郡统计年表:实时查看户口丁数、太仓粮储、府库赋税、驻军兵额与民心治安！"><span class="hotspot-label">📊 州郡统计年表</span></div>
+        <div class="hotspot" style="left:5%;top:57%;width:87%;height:26%" data-action="app:🗺️ 东汉驿路通:纵横东汉郡县地图，探访醉仙楼、袁氏坞堡与边塞关隘触发奇遇！"><span class="hotspot-label">🗺️ 东汉驿路通</span></div>
+        <div class="unlock-bar" style="bottom:10px;font-size:11px;padding:6px 14px" data-action="goto:home1">← 返回主屏幕</div>
+      </div>
+
+      <div class="screen-layer" data-screen="yx3">
+        <img class="screen-img trim-right" src="assets/game_c.png" alt="休闲一刻-其他" />
+        <div class="hotspot" style="left:3%;top:0%;width:18%;height:8%" data-action="goto:home1"><span class="pulse-dot"></span><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:4%;top:18%;width:27%;height:12%" data-action="goto:yx1"><span class="hotspot-label">🎮 游戏</span></div>
+        <div class="hotspot" style="left:34%;top:18%;width:27%;height:12%" data-action="goto:yx2"><span class="hotspot-label">🔧 工具</span></div>
+        <div class="hotspot" style="left:63%;top:18%;width:27%;height:12%" data-action="goto:yx3"><span class="hotspot-label">✨ 其他</span></div>
+        <div class="hotspot" style="left:5%;top:34%;width:85%;height:24%" data-action="app:🌤️ 献帝晴雨表:实时监测朝堂风向与献帝心情晴雨！"><span class="hotspot-label">🌤️ 献帝晴雨表</span></div>
+        <div class="hotspot" style="left:5%;top:61%;width:85%;height:24%" data-action="app:✨ 列星 & 更多玩法:观星占卜、蝴蝶效应沙盘推演戏折、方天水镜、绣衣悬案录与温泉团建！"><span class="hotspot-label">✨ 列星与沙盘推演</span></div>
+      </div>
+
+      <!-- ========== 19A~19C. 应用商城 (商城1~3.png) ========== -->
+      <div class="screen-layer" data-screen="sc1">
+        <img class="screen-img trim-right" src="assets/shop_a.png" alt="商城-琳琅货架" />
+        <div class="hotspot" style="left:2%;top:0%;width:21%;height:8%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:2%;top:11%;width:28%;height:7%" data-action="goto:sc1"><span class="hotspot-label">琳琅货架</span></div>
+        <div class="hotspot" style="left:32%;top:11%;width:28%;height:7%" data-action="goto:sc2"><span class="pulse-dot"></span><span class="hotspot-label">📱 桌面管理 (18)</span></div>
+        <div class="hotspot" style="left:62%;top:11%;width:28%;height:7%" data-action="goto:sc3"><span class="hotspot-label">＋ 导入/新建</span></div>
+        <div class="hotspot" style="left:5%;top:23%;width:86%;height:28%" data-action="app:琳琅货架 · 一键放回桌面:把暂时收进货架的「设置」「游戏」等应用随时一键放回主屏幕空位！"><span class="hotspot-label">🛍️ 一键放回桌面</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="sc2">
+        <img class="screen-img trim-right" src="assets/shop_b.png" alt="商城-桌面管理" />
+        <div class="hotspot" style="left:2%;top:0%;width:22%;height:8%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:2%;top:11%;width:29%;height:7%" data-action="goto:sc1"><span class="hotspot-label">琳琅货架</span></div>
+        <div class="hotspot" style="left:34%;top:11%;width:29%;height:7%" data-action="goto:sc2"><span class="hotspot-label">桌面管理</span></div>
+        <div class="hotspot" style="left:65%;top:11%;width:29%;height:7%" data-action="goto:sc3"><span class="pulse-dot"></span><span class="hotspot-label">＋ 导入/新建微应用</span></div>
+        <div class="hotspot" style="left:5%;top:23%;width:89%;height:71%" data-action="app:桌面席位自由管理:清晰列出主屏幕 18 款应用的页码与席位，随时一键「收纳至商城」留出壁纸空间！"><span class="hotspot-label">📱 收纳至商城</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="sc3">
+        <img class="screen-img" src="assets/shop_c.png" alt="商城-自制或导入微应用" />
+        <div class="hotspot" style="left:2%;top:0%;width:23%;height:8%" data-action="goto:home2"><span class="pulse-dot"></span><span class="hotspot-label">← 返回桌面第2页</span></div>
+        <div class="hotspot" style="left:2%;top:11%;width:30%;height:7%" data-action="goto:sc1"><span class="hotspot-label">琳琅货架</span></div>
+        <div class="hotspot" style="left:34%;top:11%;width:30%;height:7%" data-action="goto:sc2"><span class="hotspot-label">桌面管理</span></div>
+        <div class="hotspot" style="left:66%;top:11%;width:31%;height:7%" data-action="goto:sc3"><span class="hotspot-label">＋ 导入/新建</span></div>
+        <div class="hotspot" style="left:5%;top:23%;width:90%;height:72%" data-action="app:✨ 沙盒自制微应用引擎:直接编写或粘贴标准 HTML 页面、自选图标样式，一键上架到你的小手机桌面！"><span class="pulse-dot"></span><span class="hotspot-label">🧩 粘贴 HTML 自制微应用</span></div>
+      </div>
+
+      <!-- ========== 20. 傩·云镜 (傩·云镜.png) ========== -->
+      <div class="screen-layer" data-screen="nyj">
+        <img class="screen-img trim-right" src="assets/nuo_mirror.png" alt="傩·云镜-袁基私密搜索" />
+        <div class="hotspot" style="left:2%;top:2%;width:10%;height:6%" data-action="goto:home2"><span class="pulse-dot"></span><span class="hotspot-label">← 返回桌面第2页</span></div>
+        <div class="hotspot" style="left:7%;top:64%;width:81%;height:15%" data-action="app:🔍 袁基私密搜索（1小时前）:『初次赠送贴身私密手作之物是否会显得失礼轻浮』—— 密录便签：香囊上的鸢鸟已绣了七日，针脚略显生疏……"><span class="pulse-dot"></span><span class="hotspot-label">🔍 偷看袁基绣香囊便签</span></div>
+        <div class="hotspot" style="left:7%;top:80%;width:81%;height:12%" data-action="app:🔍 袁基私密搜索（昨夜）:『受惊后的鸢雀怎样喂养才肯主动靠近人手』—— 密录便签：她也是这般性子。若逼得紧了便会振翅飞走……"><span class="pulse-dot"></span><span class="hotspot-label">🔍 偷看昨夜搜索足迹</span></div>
+      </div>
+
+      <!-- ========== 21. 傩·掌机 (傩·掌机.png) ========== -->
+      <div class="screen-layer" data-screen="nzj">
+        <img class="screen-img trim-right" src="assets/nuo_gameboy.png" alt="傩·掌机-NUO BOY" />
+        <div class="hotspot" style="left:1%;top:0%;width:11%;height:7%" data-action="goto:home2"><span class="pulse-dot"></span><span class="hotspot-label">← 返回桌面第2页</span></div>
+        <div class="hotspot" style="left:66%;top:0%;width:18%;height:6%" data-action="app:◎ 更换 SWF 卡带:内置 Ruffle WASM 复古模拟引擎，经典 Flash/掌机卡带即插即玩，支持全屏！"><span class="pulse-dot"></span><span class="hotspot-label">◎ 切换游戏卡带</span></div>
+        <div class="hotspot" style="left:4%;top:64%;width:88%;height:24%" data-action="app:🎮 哆啦A梦钓鱼 · 实体手感按键:出钩成功！+5 ポイント！（支持手机触屏方向键/A/B 与电脑 WASD/空格/Z/X 映射）"><span class="pulse-dot"></span><span class="hotspot-label">🎮 按下 A / B / 空格键</span></div>
+      </div>
+
+      <!-- ========== 22. 傩·电台 (傩电台.png) ========== -->
+      <div class="screen-layer" data-screen="ndt">
+        <img class="screen-img" src="assets/nuo_radio.png" alt="傩·电台" />
+        <div class="hotspot" style="left:1%;top:2%;width:13%;height:6%" data-action="goto:home2"><span class="pulse-dot"></span><span class="hotspot-label">← 返回桌面第2页</span></div>
+        <div class="hotspot" style="left:6%;top:33%;width:86%;height:11%" data-action="app:📻 FM 101.7 · 与袁基同听中:正在收听《BIG BIG MIX·乐享精选歌单》，退出电台后依然支持全局后台常驻播放！"><span class="hotspot-label">❤️ 与袁基同听中</span></div>
+        <div class="hotspot" style="left:70%;top:57%;width:22%;height:15%;border-radius:50%" data-action="app:🎚️ 复古象牙调频旋钮:支持 87.5–108.0 MHz 丝滑调频（±0.6MHz 自动吸附锁频 SIGNAL LOCKED）！"><span class="pulse-dot"></span><span class="hotspot-label">🎚️ 拨动象牙调频旋钮</span></div>
+        <div class="hotspot" style="left:63%;top:89%;width:35%;height:7%" data-action="app:✨ 「袁基」全天收听日程:AI 按四时心境为袁基编排专属电台节目单，随时查看他在听什么！"><span class="hotspot-label">✨ 重新编排袁基日程</span></div>
+      </div>
+
+      <!-- ========== 23A~23E. 今日学宫 (今日学宫.png / 2 / 学宫3~5.png) ========== -->
+      <div class="screen-layer" data-screen="xg1">
+        <img class="screen-img trim-right" src="assets/campus_a.png" alt="今日学宫-校园" />
+        <div class="hotspot" style="left:3%;top:1%;width:10%;height:6%" data-action="goto:home2"><span class="hotspot-label">← 返回桌面第2页</span></div>
+        <div class="hotspot" style="left:59%;top:1%;width:30%;height:6%" data-action="app:✨ AI · 袁基手笔:一键由礼乐系首席学长袁基润色校园公告与活动帖！"><span class="hotspot-label">✨ AI·袁基手笔</span></div>
+        <div class="hotspot" style="left:5%;top:25%;width:85%;height:50%" data-action="app:【辟雍官宣】洛南茗社招贤启:以茶为媒，以道为契。愿携素心，共赴清集。（1520 浏览 · 社团活动）"><span class="hotspot-label">🍵 洛南茗社招贤启</span></div>
+        <!-- 底部 5 页签：校园 / 服务 / 学宫圈 / 讯息 / 我的 -->
+        <div class="hotspot" style="left:2%;top:86%;width:17%;height:11%" data-action="goto:xg1"><span class="hotspot-label">校园</span></div>
+        <div class="hotspot" style="left:20%;top:86%;width:18%;height:11%" data-action="goto:xg2"><span class="pulse-dot"></span><span class="hotspot-label">🏫 服务</span></div>
+        <div class="hotspot" style="left:39%;top:86%;width:18%;height:11%" data-action="goto:xg3"><span class="hotspot-label">💬 学宫圈</span></div>
+        <div class="hotspot" style="left:58%;top:86%;width:18%;height:11%" data-action="goto:xg4"><span class="hotspot-label">✉️ 讯息</span></div>
+        <div class="hotspot" style="left:77%;top:86%;width:18%;height:11%" data-action="goto:xg5"><span class="hotspot-label">👤 我的</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="xg2">
+        <img class="screen-img trim-right" src="assets/campus_b.png" alt="今日学宫-服务" />
+        <div class="hotspot" style="left:3%;top:1%;width:10%;height:6%" data-action="goto:home2"><span class="hotspot-label">← 返回桌面第2页</span></div>
+        <div class="hotspot" style="left:4%;top:30%;width:88%;height:54%" data-action="app:辟雍太学常用教务服务:支持申请离校、问卷调查、古籍借阅、马车时刻表、通行符牒与查看空教室！"><span class="hotspot-label">🏛️ 六大校园教务服务</span></div>
+        <div class="hotspot" style="left:2%;top:86%;width:17%;height:11%" data-action="goto:xg1"><span class="hotspot-label">校园</span></div>
+        <div class="hotspot" style="left:20%;top:86%;width:18%;height:11%" data-action="goto:xg2"><span class="hotspot-label">服务</span></div>
+        <div class="hotspot" style="left:39%;top:86%;width:18%;height:11%" data-action="goto:xg3"><span class="pulse-dot"></span><span class="hotspot-label">💬 学宫圈</span></div>
+        <div class="hotspot" style="left:58%;top:86%;width:18%;height:11%" data-action="goto:xg4"><span class="hotspot-label">✉️ 讯息</span></div>
+        <div class="hotspot" style="left:77%;top:86%;width:18%;height:11%" data-action="goto:xg5"><span class="hotspot-label">👤 我的</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="xg3">
+        <img class="screen-img trim-right" src="assets/campus_c.png" alt="今日学宫-学宫圈" />
+        <div class="hotspot" style="left:3%;top:1%;width:10%;height:6%" data-action="goto:home2"><span class="hotspot-label">← 返回桌面第2页</span></div>
+        <div class="hotspot" style="left:4%;top:62%;width:88%;height:24%" data-action="app:袁基 · 礼乐系首席学长动态:「辰时晨钟初鸣，诸位同窗却为 #辟雍晨读点卯捉逃风波# 喧哗至此，实在有失礼数。不知某位昨夜迟睡的贵客……」"><span class="pulse-dot"></span><span class="hotspot-label">🍵 袁基学长校园动态</span></div>
+        <div class="hotspot" style="left:2%;top:86%;width:17%;height:11%" data-action="goto:xg1"><span class="hotspot-label">校园</span></div>
+        <div class="hotspot" style="left:20%;top:86%;width:18%;height:11%" data-action="goto:xg2"><span class="hotspot-label">服务</span></div>
+        <div class="hotspot" style="left:39%;top:86%;width:18%;height:11%" data-action="goto:xg3"><span class="hotspot-label">学宫圈</span></div>
+        <div class="hotspot" style="left:58%;top:86%;width:18%;height:11%" data-action="goto:xg4"><span class="pulse-dot"></span><span class="hotspot-label">✉️ 讯息</span></div>
+        <div class="hotspot" style="left:77%;top:86%;width:18%;height:11%" data-action="goto:xg5"><span class="hotspot-label">👤 我的</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="xg4">
+        <img class="screen-img" src="assets/campus_d.png" alt="今日学宫-讯息处" />
+        <div class="hotspot" style="left:3%;top:1%;width:10%;height:6%" data-action="goto:home2"><span class="hotspot-label">← 返回桌面第2页</span></div>
+        <div class="hotspot" style="left:4%;top:25%;width:92%;height:58%" data-action="app:学宫讯息处 · 袁基的私下安排:郝管事（桂花酪浆留膳备忘）、张主簿（广陵君古籍借还）、荀攸夫子（消假登记）、曹校尉（演武场借长弓）——全是为你准备的！"><span class="hotspot-label">✉️ 偷看袁基学宫往来讯息</span></div>
+        <div class="hotspot" style="left:2%;top:86%;width:17%;height:11%" data-action="goto:xg1"><span class="hotspot-label">校园</span></div>
+        <div class="hotspot" style="left:20%;top:86%;width:18%;height:11%" data-action="goto:xg2"><span class="hotspot-label">服务</span></div>
+        <div class="hotspot" style="left:39%;top:86%;width:18%;height:11%" data-action="goto:xg3"><span class="hotspot-label">学宫圈</span></div>
+        <div class="hotspot" style="left:58%;top:86%;width:18%;height:11%" data-action="goto:xg4"><span class="hotspot-label">讯息</span></div>
+        <div class="hotspot" style="left:77%;top:86%;width:18%;height:11%" data-action="goto:xg5"><span class="pulse-dot"></span><span class="hotspot-label">👤 我的</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="xg5">
+        <img class="screen-img" src="assets/campus_e.png" alt="今日学宫-个人中心" />
+        <div class="hotspot" style="left:3%;top:1%;width:10%;height:6%" data-action="goto:home2"><span class="pulse-dot"></span><span class="hotspot-label">← 返回桌面第2页</span></div>
+        <div class="hotspot" style="left:6%;top:14%;width:88%;height:50%" data-action="app:袁基 · 礼乐系首席学长（太学掌仪）:已修学分 48.0 · 借阅古籍 1 · 符牒余额 ¥5200.0，右上角支持一键「切换分身」！"><span class="hotspot-label">🎓 袁基太学掌仪档案</span></div>
+        <div class="hotspot" style="left:2%;top:86%;width:17%;height:11%" data-action="goto:xg1"><span class="hotspot-label">校园</span></div>
+        <div class="hotspot" style="left:20%;top:86%;width:18%;height:11%" data-action="goto:xg2"><span class="hotspot-label">服务</span></div>
+        <div class="hotspot" style="left:39%;top:86%;width:18%;height:11%" data-action="goto:xg3"><span class="hotspot-label">学宫圈</span></div>
+        <div class="hotspot" style="left:58%;top:86%;width:18%;height:11%" data-action="goto:xg4"><span class="hotspot-label">讯息</span></div>
+        <div class="hotspot" style="left:77%;top:86%;width:18%;height:11%" data-action="goto:xg5"><span class="hotspot-label">我的</span></div>
+      </div>
+
+      <!-- ========== 24A~24D. OC点单 (点单1~4.png) ========== -->
+      <div class="screen-layer" data-screen="dd1">
+        <img class="screen-img" src="assets/menu_a.png" alt="OC点单-首页" />
+        <div class="hotspot" style="left:2%;top:1%;width:29%;height:6%" data-action="goto:home2"><span class="hotspot-label">← 返回小手机</span></div>
+        <div class="hotspot" style="left:69%;top:1%;width:29%;height:6%" data-action="app:⚙️ 装修与身份中枢:支持 AI 一键全域建店、自由定制门面主题与切换 VIP 顾客身份！"><span class="hotspot-label">⚙️ 装修/身份</span></div>
+        <div class="hotspot" style="left:6%;top:46%;width:88%;height:23%" data-action="goto:dd2"><span class="pulse-dot"></span><span class="hotspot-label">⚡ 军营面交 / 信使送达 · 去点单</span></div>
+        <!-- 底部 4 页签：首页 / 点单 / 会员 / 订单 -->
+        <div class="hotspot" style="left:2%;top:87%;width:22%;height:11%" data-action="goto:dd1"><span class="hotspot-label">首页</span></div>
+        <div class="hotspot" style="left:25%;top:87%;width:24%;height:11%" data-action="goto:dd2"><span class="pulse-dot"></span><span class="hotspot-label">📋 去点单</span></div>
+        <div class="hotspot" style="left:50%;top:87%;width:24%;height:11%" data-action="goto:dd3"><span class="hotspot-label">👑 会员</span></div>
+        <div class="hotspot" style="left:75%;top:87%;width:23%;height:11%" data-action="goto:dd4"><span class="hotspot-label">📦 订单</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="dd2">
+        <img class="screen-img trim-right" src="assets/menu_b.png" alt="OC点单-菜单" />
+        <div class="hotspot" style="left:2%;top:1%;width:28%;height:6%" data-action="goto:home2"><span class="hotspot-label">← 返回小手机</span></div>
+        <div class="hotspot" style="left:24%;top:42%;width:69%;height:42%" data-action="app:宛城狼营 × 绣衣楼联名特供:飞云同款「联名狗粮礼盒（军饷280）」、「狼毛大氅·典藏款（军饷320）」——选规格下单生成专属小票！"><span class="hotspot-label">🐺 选规格下单</span></div>
+        <div class="hotspot" style="left:2%;top:87%;width:22%;height:11%" data-action="goto:dd1"><span class="hotspot-label">首页</span></div>
+        <div class="hotspot" style="left:25%;top:87%;width:24%;height:11%" data-action="goto:dd2"><span class="hotspot-label">点单</span></div>
+        <div class="hotspot" style="left:50%;top:87%;width:24%;height:11%" data-action="goto:dd3"><span class="pulse-dot"></span><span class="hotspot-label">👑 看会员权益</span></div>
+        <div class="hotspot" style="left:75%;top:87%;width:23%;height:11%" data-action="goto:dd4"><span class="hotspot-label">📦 订单</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="dd3">
+        <img class="screen-img trim-right" src="assets/menu_c.png" alt="OC点单-会员" />
+        <div class="hotspot" style="left:2%;top:1%;width:28%;height:6%" data-action="goto:home2"><span class="hotspot-label">← 返回小手机</span></div>
+        <div class="hotspot" style="left:4%;top:18%;width:89%;height:26%" data-action="app:绣衣楼 VIP · 狼营权益卡:青铜卡（军饷九折·军营面交优先）、白银卡（军饷八折）左右滑动切换！"><span class="hotspot-label">👑 狼营青铜/白银卡</span></div>
+        <div class="hotspot" style="left:4%;top:55%;width:89%;height:30%" data-action="app:账户储值中心:储值军饷 500 赠狼毛挂件，储值 1000 赠粮票 + 狼牙吊坠！"><span class="hotspot-label">💎 军饷储值赠礼</span></div>
+        <div class="hotspot" style="left:2%;top:87%;width:22%;height:11%" data-action="goto:dd1"><span class="hotspot-label">首页</span></div>
+        <div class="hotspot" style="left:25%;top:87%;width:24%;height:11%" data-action="goto:dd2"><span class="hotspot-label">点单</span></div>
+        <div class="hotspot" style="left:50%;top:87%;width:24%;height:11%" data-action="goto:dd3"><span class="hotspot-label">会员</span></div>
+        <div class="hotspot" style="left:75%;top:87%;width:23%;height:11%" data-action="goto:dd4"><span class="pulse-dot"></span><span class="hotspot-label">📦 看进行中订单</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="dd4">
+        <img class="screen-img" src="assets/menu_d.png" alt="OC点单-订单" />
+        <div class="hotspot" style="left:3%;top:10%;width:94%;height:35%" data-action="app:📦 订单 #A227 · 宛城狼营（契约成立·进行中）:「狼毛大氅·典藏款（军饷 320）」请凭单号前往安全屋交接，支持评价与生成精美热敏小票凭证！"><span class="pulse-dot"></span><span class="hotspot-label">🧾 查看凭证与评价</span></div>
+        <div class="hotspot" style="left:2%;top:87%;width:22%;height:11%" data-action="goto:dd1"><span class="hotspot-label">首页</span></div>
+        <div class="hotspot" style="left:25%;top:87%;width:24%;height:11%" data-action="goto:dd2"><span class="hotspot-label">点单</span></div>
+        <div class="hotspot" style="left:50%;top:87%;width:24%;height:11%" data-action="goto:dd3"><span class="hotspot-label">会员</span></div>
+        <div class="hotspot" style="left:75%;top:87%;width:23%;height:11%" data-action="goto:dd4"><span class="hotspot-label">订单</span></div>
+        <div class="unlock-bar" style="bottom:86px;font-size:11px;padding:6px 14px" data-action="goto:home2">← 返回桌面第 2 页</div>
+      </div>
+
+      <!-- ========== 25A~25C. 休闲一刻·修武扬文 (游戏-修武杨文1~3.png) ========== -->
+      <div class="screen-layer" data-screen="xw1">
+        <img class="screen-img trim-right" src="assets/game_drill_a.png" alt="修武扬文-第1页" />
+        <div class="hotspot" style="left:4%;top:0%;width:17%;height:8%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:4%;top:12%;width:17%;height:6%" data-action="goto:yx1"><span class="hotspot-label">‹ 回游戏厅</span></div>
+        <div class="hotspot" style="left:35%;top:23%;width:26%;height:6%" data-action="goto:xw2"><span class="pulse-dot"></span><span class="hotspot-label">👉 翻到第 2 页</span></div>
+        <div class="hotspot" style="right:4%;top:53%;width:12%;height:12%" data-action="goto:xw2"><span class="pulse-dot"></span><span class="hotspot-label">👉 下一页</span></div>
+        <div class="hotspot" style="left:8%;top:31%;width:79%;height:65%" data-action="app:⚔️ 修武扬文 · 第 1 页:内置木桩训练、蹴鞠训练、射箭训练、敏捷训练，全都能直接上手开玩！"><span class="hotspot-label">🏹 木桩 / 蹴鞠 / 射箭 / 敏捷</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="xw2">
+        <img class="screen-img" src="assets/game_drill_b.png" alt="修武扬文-第2页" />
+        <div class="hotspot" style="left:4%;top:0%;width:18%;height:8%" data-action="goto:home1"><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:4%;top:12%;width:17%;height:6%" data-action="goto:yx1"><span class="hotspot-label">‹ 回游戏厅</span></div>
+        <div class="hotspot" style="left:0%;top:54%;width:10%;height:12%" data-action="goto:xw1"><span class="hotspot-label">👈 上一页</span></div>
+        <div class="hotspot" style="right:0%;top:54%;width:10%;height:12%" data-action="goto:xw3"><span class="pulse-dot"></span><span class="hotspot-label">👉 下一页</span></div>
+        <div class="hotspot" style="left:38%;top:23%;width:26%;height:6%" data-action="goto:xw3"><span class="pulse-dot"></span><span class="hotspot-label">👉 翻到第 3 页</span></div>
+        <div class="hotspot" style="left:8%;top:31%;width:84%;height:65%" data-action="app:🎵 修武扬文 · 第 2 页:音律训练、二零四八、记忆训练、东汉尼拔，文武双全！"><span class="hotspot-label">🎵 音律 / 2048 / 记忆 / 东汉尼拔</span></div>
+      </div>
+
+      <div class="screen-layer" data-screen="xw3">
+        <img class="screen-img trim-right" src="assets/game_drill_c.png" alt="修武扬文-第3页" />
+        <div class="hotspot" style="left:4%;top:0%;width:17%;height:8%" data-action="goto:home1"><span class="pulse-dot"></span><span class="hotspot-label">← 返回桌面</span></div>
+        <div class="hotspot" style="left:4%;top:12%;width:17%;height:6%" data-action="goto:yx1"><span class="hotspot-label">‹ 回游戏厅</span></div>
+        <div class="hotspot" style="left:0%;top:55%;width:10%;height:12%" data-action="goto:xw2"><span class="hotspot-label">👈 上一页</span></div>
+        <div class="hotspot" style="left:35%;top:23%;width:26%;height:6%" data-action="goto:xw1"><span class="hotspot-label">↩ 回第 1 页</span></div>
+        <div class="hotspot" style="left:7%;top:31%;width:78%;height:35%" data-action="app:🍬 修武扬文 · 第 3 页:广陵消消乐 + 黄巾矿工，摸鱼解压神器！"><span class="hotspot-label">🍬 广陵消消 & 黄巾矿工</span></div>
+      </div>
+
+      <!-- ========== 10. 传讯：袁基可交互「活人感」聊天窗 ========== -->
+      <div class="screen-layer chat-screen" data-screen="chat">
+        <div class="chat-top">
+          <div class="chat-back" data-action="goto:home1">‹</div>
+          <div class="av" data-avatar="yuanji" style="width:34px;height:34px;font-size:15px">基</div>
+          <div>
+            <b style="font-family:var(--serif);font-size:14px;color:var(--olive-d)">袁基</b>
+            <div style="font-size:10px;color:var(--olive)">● 在线 · 正在书房煮茶</div>
+          </div>
+          <span class="chat-status-pill">灵犀生境 · 已开启</span>
+        </div>
+        <div class="construct-bar" id="construct-bar">
+          ✨ 构造状态：正替你温着茶，目光落在传讯玉简上
+        </div>
+        <div class="chat-msgs" id="chat-msgs"></div>
+        <div class="chat-prompts">
+          <div class="prompt-tip">
+            <span>👇 点击下方台词，直接触发袁基回复与微动效：</span>
+            <span style="cursor:pointer;color:var(--coral);font-weight:700" data-action="goto:home1">返回桌面 ›</span>
+          </div>
+          <div class="prompt-list" id="prompt-list">
+            <span class="prompt-chip" data-chat="0">1. 今天公文好多，不想批了…</span>
+            <span class="prompt-chip" data-chat="1">2. 刚才太疾驰的账单，谢谢袁公子报销~</span>
+            <span class="prompt-chip" data-chat="2">3. 递茶表情包？茶里没放奇怪的东西吧？</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 底部快捷状态标签 -->
+  <div class="tagrow" id="tagrow"></div>
+
+  <div class="brand">
+    <b>Milvus-Phone</b>
+    <span>鸢 小 手 机 · 57 图 全 联 动 样 机</span>
+  </div>
+</div></div>
+
+<!-- 底部导演控制栏 -->
+<div class="dir">
+  <button class="btn pri" id="bAuto">▶ 自动演示</button>
+  <button class="btn pill on" data-jump="lock">锁屏</button>
+  <button class="btn pill" data-jump="home1">桌面</button>
+  <button class="btn pill" data-jump="xyl1">绣衣楼</button>
+  <button class="btn pill" data-jump="xl1">杏林</button>
+  <button class="btn pill" data-jump="cp1">情侣</button>
+  <button class="btn pill" data-jump="weather">天气</button>
+  <button class="btn pill" data-jump="lt1">论坛</button>
+  <button class="btn pill" data-jump="rl1">日历</button>
+  <button class="btn pill" data-jump="yd1">阅读</button>
+  <button class="btn pill" data-jump="yy">音乐</button>
+  <button class="btn pill" data-jump="ngy">观影</button>
+  <button class="btn pill" data-jump="nyx">游戏仓</button>
+  <button class="btn pill" data-jump="tjc1">太疾驰</button>
+  <button class="btn pill" data-jump="yx1">休闲</button>
+  <button class="btn pill" data-jump="ndt">电台</button>
+  <button class="btn pill" data-jump="nzj">掌机</button>
+  <button class="btn pill" data-jump="nyj">云镜</button>
+  <button class="btn pill" data-jump="xg1">学宫</button>
+  <button class="btn pill" data-jump="dd1">点单</button>
+  <button class="btn pill" data-jump="sc1">商城</button>
+  <button class="btn pill" data-jump="sz1">设置</button>
+  <button class="btn pill" data-jump="chat">聊天</button>
+  <button class="btn" id="bDebug">热区(D)</button>
+  <button class="btn" id="bRec">录屏(H)</button>
+</div>
+
+
+<script src="./app.js"></script>
+</body>
+</html>

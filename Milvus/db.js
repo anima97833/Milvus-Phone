@@ -542,6 +542,132 @@ const avatarStore = {
 };
 
 // 用户设置存储操作（新增）
+// 身份配置库（user_personas）用户头像 IndexedDB 持久化与自动迁移工具
+const personaAvatarStore = {
+  _cache: {},
+  _keyOf: (id) => `persona_avatar_${id}`,
+  _refOf: (id) => `idb:persona_avatar_${id}`,
+
+  save: async (id, dataUrl) => {
+    if (!id) return "";
+    const key = personaAvatarStore._keyOf(id);
+    if (!dataUrl || typeof dataUrl !== "string") {
+      delete personaAvatarStore._cache[key];
+      try { await avatarStore.delete(key); } catch (e) {}
+      return "";
+    }
+    if (dataUrl.startsWith("idb:")) return dataUrl;
+    if (dataUrl.startsWith("data:image/")) {
+      personaAvatarStore._cache[key] = dataUrl;
+      try {
+        await avatarStore.put(key, dataUrl);
+        return personaAvatarStore._refOf(id);
+      } catch (e) {
+        console.error("保存身份头像到 IndexedDB 失败:", e);
+        return dataUrl;
+      }
+    }
+    return dataUrl;
+  },
+
+  get: async (idOrRef) => {
+    if (!idOrRef) return "";
+    const key = String(idOrRef).startsWith("idb:")
+      ? String(idOrRef).slice(4)
+      : personaAvatarStore._keyOf(idOrRef);
+    if (personaAvatarStore._cache[key]) return personaAvatarStore._cache[key];
+    try {
+      const rec = await avatarStore.get(key);
+      const val = rec && rec.avatarData ? rec.avatarData : "";
+      if (val) personaAvatarStore._cache[key] = val;
+      return val;
+    } catch (e) {
+      return "";
+    }
+  },
+
+  delete: async (id) => {
+    if (!id) return;
+    const key = personaAvatarStore._keyOf(id);
+    delete personaAvatarStore._cache[key];
+    try { await avatarStore.delete(key); } catch (e) {}
+  },
+
+  resolveSync: (avatarVal, id) => {
+    if (!avatarVal && id) {
+      return personaAvatarStore._cache[personaAvatarStore._keyOf(id)] || "";
+    }
+    if (typeof avatarVal === "string" && avatarVal.startsWith("idb:")) {
+      const key = avatarVal.slice(4);
+      if (personaAvatarStore._cache[key]) return personaAvatarStore._cache[key];
+      personaAvatarStore.get(avatarVal).catch(() => {});
+      return "";
+    }
+    return avatarVal || "";
+  },
+
+  hydratePersonas: async (list) => {
+    if (!Array.isArray(list)) return [];
+    let migrated = false;
+    const slimForStorage = [];
+    const hydrated = [];
+
+    for (const p of list) {
+      if (!p) continue;
+      const av = p.avatar || "";
+      if (typeof av === "string" && av.startsWith("data:image/")) {
+        const ref = await personaAvatarStore.save(p.id, av);
+        if (ref && ref.startsWith("idb:")) migrated = true;
+        slimForStorage.push({ ...p, avatar: ref || av });
+        hydrated.push({ ...p, avatar: av });
+      } else if (typeof av === "string" && av.startsWith("idb:")) {
+        const real = await personaAvatarStore.get(av);
+        slimForStorage.push(p);
+        hydrated.push({ ...p, avatar: real || "" });
+      } else {
+        slimForStorage.push(p);
+        hydrated.push(p);
+      }
+    }
+
+    if (migrated) {
+      try {
+        localStorage.setItem("user_personas", JSON.stringify(slimForStorage));
+        console.log("[PersonaAvatar] 已自动将身份配置库 Base64 头像迁移至 IndexedDB，释放 localStorage 空间");
+      } catch (e) {}
+    }
+    return hydrated;
+  },
+
+  prepareForStorage: async (list) => {
+    if (!Array.isArray(list)) return [];
+    const out = [];
+    for (const p of list) {
+      if (!p) continue;
+      const av = p.avatar || "";
+      if (typeof av === "string" && av.startsWith("data:image/")) {
+        const ref = await personaAvatarStore.save(p.id, av);
+        out.push({ ...p, avatar: ref || "" });
+      } else {
+        out.push(p);
+      }
+    }
+    return out;
+  }
+};
+
+if (typeof window !== "undefined") {
+  window.personaAvatarStore = personaAvatarStore;
+  setTimeout(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem("user_personas") || "[]");
+      if (Array.isArray(raw) && raw.length > 0) {
+        personaAvatarStore.hydratePersonas(raw).catch(() => {});
+      }
+    } catch (e) {}
+  }, 50);
+}
+
 const settingsStore = {
   // === 场景与换装选定形态 (团建/离线/心纸居) ===
     getSelectedSprites: async (key = "t8_teambuilding_selected_sprites") => {
