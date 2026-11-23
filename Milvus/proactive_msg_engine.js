@@ -34,6 +34,8 @@
     quietStart: "23:30",
     quietEnd: "07:30",
     browserNotify: false,
+    allowVideoCallInvite: false,
+    videoCallChance: 25,
     cloudEnabled: false,
     cloudWorkerUrl: "",
     cloudSecret: "",
@@ -626,6 +628,23 @@ ${speakerDesc || "- 群内名士"}
       }
     }
     dispatchEvt(DELIVERED_EVENT, { chatId: cid, chatName: resolvedChat.name || "名士", messages: deliveredMsgs });
+
+    if (
+      cfg.allowVideoCallInvite &&
+      global.VideoCallInviteEngine &&
+      typeof global.VideoCallInviteEngine.receiveIncomingCall === "function" &&
+      Math.random() * 100 < (Number(cfg.videoCallChance) || 25)
+    ) {
+      global.VideoCallInviteEngine.receiveIncomingCall({
+        chatData: resolvedChat,
+        isGroup: Boolean(isGroup),
+        initiatorName: (deliveredMsgs[0] && deliveredMsgs[0].sender) || resolvedChat.name || "",
+        reason: String((deliveredMsgs[0] && deliveredMsgs[0].text) || "想当面和你视频聊聊").slice(0, 48),
+        triggerSource: "proactive",
+        quietStart: cfg.quietStart,
+        quietEnd: cfg.quietEnd
+      }).catch(() => {});
+    }
 
     if (cfg.browserNotify) {
       maybeSendBrowserNotification(
@@ -1338,6 +1357,16 @@ ${speakerDesc || "- 群内名士"}
             }
           }),
           "后台标签页弹出浏览器桌面通知（需授权）"
+        ),
+        h(
+          "label",
+          { style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: "#434A45", cursor: "pointer" } },
+          h("input", {
+            type: "checkbox",
+            checked: Boolean(cfg.allowVideoCallInvite),
+            onChange: (e) => update({ allowVideoCallInvite: e.target.checked })
+          }),
+          "允许偶发触发 AI 主动视频来电（约 25% 概率，受 15 分钟冷却与免打扰保护）"
         ),
 
         // 立即试发按钮 + 提示
