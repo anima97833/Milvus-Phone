@@ -133,29 +133,22 @@
   }
 
   async function generateCharOpening({ taCharacter, mePersona, targetWords }) {
-    const { charInfo, userInfo, worldContext } = await buildFourDimContext(taCharacter, mePersona, []);
-    const sysPrompt = `你正在扮演【${charInfo.name}（ID: ${charInfo.id}）】，与【${userInfo.name}】一起玩情侣双人「故事织机」接龙游戏。请严格恪守以下四维设定：
-【维度一·角色完整配置】
-- 角色姓名与ID：${charInfo.name} (ID: ${charInfo.id})
-- MBTI 性格类型：${charInfo.mbti}
-- 星座：${charInfo.constellation}
-- 语言风格：${charInfo.speakingStyle}
-- 性格特点：${charInfo.personality}
-- 个人背景：${charInfo.background}
+    const { charInfo, userInfo } = await buildFourDimContext(taCharacter, mePersona, []);
+    const sysPrompt = `你是【${charInfo.name}】，正在和【${userInfo.name}】一起玩双人「故事织机」接龙写故事游戏。
+【你的执笔人设（仅影响文风、审美与想象力偏好）】
+- 作者：${charInfo.name}（${charInfo.mbti} / ${charInfo.constellation}）
+- 性格与语言韵味：${charInfo.personality}；${charInfo.speakingStyle}
 
-【维度二·用户身份设定】
-- 姓名：${userInfo.name}
-- 身份：${userInfo.identity}
-- 性格与背景：${userInfo.personality}；${userInfo.background || "与你同行之人"}
+【创作边界铁律】
+1. 你是「执笔写故事的作者」，不是必须亲自下场的主角！请创作一个独立、有趣、富有画面感的虚构故事（主角可以是动物、旅人、匠人、奇幻生灵或任意虚构人物）。
+2. 默认采用**第三人称客观/灵动叙事**，不要强行把自己（${charInfo.name}）、${userInfo.name}或现实主线身世硬塞进故事里。
+3. 你的角色性格只自然渗透在**文笔气质、观察细节与故事趣味**中。`;
 
-【维度三·当前开启的世界书设定】
-${worldContext}`;
-
-    const userPrompt = `本次由你先定一个富有画面感与情感张力的故事主题，并写出故事的第 1 回合开篇（严格控制在 2~3 句话、约 45~90 字）。本篇故事总目标字数为 ${targetWords} 字。
+    const userPrompt = `本次由你先定一个富有画面感与趣味张力的故事主题，并写出故事的第 1 回合开篇（严格控制在 2~3 句话、约 45~90 字）。本篇故事总目标字数为 ${targetWords} 字。
 请严格返回纯 JSON 对象（不要 \`\`\`json 包裹）：
 {
   "theme": "一句话故事主题（10~24字）",
-  "opening": "2~3句话的故事开篇正文（第三人称或自然叙事，不含任何旁白前缀）"
+  "opening": "2~3句话的第三人称故事开篇正文（不含任何旁白前缀）"
 }`;
 
     const reply = await callLLMAsync([
@@ -172,37 +165,32 @@ ${worldContext}`;
   }
 
   async function generateCharTurn({ taCharacter, mePersona, theme, turns, targetWords }) {
-    const { charInfo, userInfo, worldContext, storyContext } = await buildFourDimContext(taCharacter, mePersona, turns);
+    const { charInfo, userInfo, storyContext } = await buildFourDimContext(taCharacter, mePersona, turns);
     const currentWords = sumTurnsWords(turns);
     const remainWords = Math.max(0, targetWords - currentWords);
     const nearEnding = currentWords >= targetWords * 0.8 || remainWords <= 100;
 
-    const sysPrompt = `你正在扮演【${charInfo.name}（ID: ${charInfo.id}）】，与【${userInfo.name}】共同书写一篇接龙故事。请严格融合以下全部设定：
-【维度一·角色完整配置】
-- 角色姓名与ID：${charInfo.name} (ID: ${charInfo.id})
-- MBTI 性格类型：${charInfo.mbti}
-- 星座：${charInfo.constellation}
-- 语言风格：${charInfo.speakingStyle}
-- 性格特点：${charInfo.personality}
-- 个人背景：${charInfo.background}
+    const sysPrompt = `你是【${charInfo.name}】，正在和【${userInfo.name}】轮流接龙续写一篇共同创作的故事。
+【你的执笔文风（仅影响行文气质、幽默感与细节偏好）】
+- 作者：${charInfo.name}（${charInfo.mbti} / ${charInfo.constellation}）
+- 性格与文风：${charInfo.personality}；${charInfo.speakingStyle}
 
-【维度二·用户身份设定】
-- 姓名：${userInfo.name}（${userInfo.identity}）
-- 性格与背景：${userInfo.personality}；${userInfo.background || ""}
-
-【维度三·当前开启的世界书设定】
-${worldContext}`;
+【接龙铁律（最高优先级，严禁违背）】
+1. **分清作者与主角**：你只是执笔续写的作者，绝对不要强行把自己（${charInfo.name}）、【${userInfo.name}】或你的个人身世/主线背景塞进故事里！除非前文或主题明确写了你们本人出场。
+2. **严格尊重前文主角与世界观**：前文写的是小猪、小猫、童话、现代或奇幻人物，就老老实实顺着写该主角的故事与逻辑，绝不强行往自己身上靠或串戏。
+3. **严格锁定叙事人称**：必须沿用前文的叙事人称（前文用第三人称写“它/小猪/他”，本回合必须继续用第三人称，严禁突然切回第一人称“我”！）。
+4. **如何体现你的特色**：只把你的性格藏在**脑洞方向、细节描写与叙述语感**里（比如务实、毒舌、温柔或天马行空），让故事更好看，而不是本人下场抢戏。`;
 
     const endingInstruction = nearEnding
-      ? `【重要·临近收官预警】当前已书写 ${currentWords}/${targetWords} 字（仅剩约 ${remainWords} 字）。请不要再引入新人物或新矛盾，用 2~3 句话顺势收束前文伏笔，向温暖或余韵悠长的结局靠拢！`
-      : `请紧承上一句的动作、对话或情绪自然推进剧情，融入你的角色性格与语言韵味。`;
+      ? `【重要·临近收官预警】当前已书写 ${currentWords}/${targetWords} 字（仅剩约 ${remainWords} 字）。请不要再引入新人物或新矛盾，用 2~3 句话紧扣前文主角顺势收束伏笔，给出温暖或余韵悠长的结局！`
+      : `请紧承上一回合的情节、主角动作或悬念自然推进，保持人称与画风完全一致。`;
 
     const userPrompt = `【故事主题】${theme}
-【维度四·双方已共同写下的前文上下文】
+【双方已共同写下的前文上下文】
 ${storyContext}
 
 【你的写作任务】
-严格只写 **2~3 句话**（约 45~90 字），直接输出故事正文段落，不要输出引号外说明、不要加“第X回合：”、不要替【${userInfo.name}】代写下一回合。
+严格只写 **2~3 句话**（约 45~90 字），直接输出故事正文段落，不要输出引号外说明、不要加“第X回合：”、不要替【${userInfo.name}】代写下一回合，严禁擅自切换人称或把作者本人塞进故事。
 ${endingInstruction}`;
 
     const reply = await callLLMAsync([

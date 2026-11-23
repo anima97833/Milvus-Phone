@@ -1082,7 +1082,28 @@ title: 主题名称
           props.onClose && props.onClose();
           props.onOpenWanxiang && props.onOpenWanxiang();
         }
-      }
+      },
+      ...(global.ThirteenProvincesEngine
+        ? [
+            {
+              id: "thirteen_provinces",
+              name: "十三州密卷",
+              desc: "画像·金兰契·卷宗",
+              icon: "🗺️",
+              bg: "linear-gradient(135deg, #FAF0E8 0%, #F5E1DC 100%)",
+              border: "#E3C3BC",
+              onClick: () => {
+                props.onClose && props.onClose();
+                const cd = props.chatData || {};
+                global.ThirteenProvincesEngine.openModal({
+                  charId: String(cd.id || props.charId || ""),
+                  charName: cd.name || (cd.profile && cd.profile.name) || props.charName || "名士",
+                  userName: props.userName || "主公"
+                });
+              }
+            }
+          ]
+        : [])
     ];
 
     return React.createElement(

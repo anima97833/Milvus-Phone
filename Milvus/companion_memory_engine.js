@@ -880,23 +880,46 @@
       _recentShownByChar[cid] = recentMap;
     }
 
+    // 协同注入：东汉十三州密卷（朱砂御批 + 活跃金兰契 + BM25/向量混合召回，自动与日总结去重）
+    let archiveBlock = "";
+    let archiveCount = 0;
+    if (global.ThirteenProvincesEngine && typeof global.ThirteenProvincesEngine.buildArchiveContext === "function") {
+      try {
+        const tpRes = await global.ThirteenProvincesEngine.buildArchiveContext(cid, currentUserText, {
+          excludeTexts: accepted.map((a) => a.text)
+        });
+        if (tpRes && tpRes.block) {
+          archiveBlock = tpRes.block;
+          archiveCount = (tpRes.pinnedCount || 0) + (tpRes.vowCount || 0) + (tpRes.recalledCount || 0);
+        }
+      } catch (e) {
+        console.warn("[CompanionMemory] 十三州密卷检索跳过:", e);
+      }
+    }
+
     const layoutMsgs = buildCachedLayout({
       fixedSystemPrompt,
       capsuleBlock: folio.capsuleBlock,
       recentMessages: folio.uncoveredMessages,
-      volatileBlocks: [recallBlock],
+      volatileBlocks: [archiveBlock, recallBlock],
       currentUserMessage: currentUserText
     });
 
     return {
       messages: layoutMsgs,
-      hasRecall: accepted.length > 0,
+      hasRecall: accepted.length > 0 || archiveCount > 0,
       capsuleCount: folio.capsuleCount,
-      recalledCount: accepted.length
+      recalledCount: accepted.length,
+      archiveCount
     };
   }
 
   function onAfterSoloReply({ charId, charName, userName, allMessages }) {
+    if (global.ThirteenProvincesEngine && typeof global.ThirteenProvincesEngine.maybeAutoDigest === "function") {
+      try {
+        global.ThirteenProvincesEngine.maybeAutoDigest({ charId, charName, userName, allMessages });
+      } catch (e) {}
+    }
     if (!isEnabledForChat(charId)) return;
     const p = getPrefs();
     if (!p.autoFolio) return;
@@ -926,7 +949,13 @@
       getCapsules(charId),
       dbGetAllByChar(STORE_SUMMARIES, charId)
     ]);
-    return { version: 1, charId: String(charId), exportedAt: Date.now(), capsules, summaries };
+    let thirteenProvinces = null;
+    if (global.ThirteenProvincesEngine && typeof global.ThirteenProvincesEngine.exportCharArchive === "function") {
+      try {
+        thirteenProvinces = await global.ThirteenProvincesEngine.exportCharArchive(charId);
+      } catch (e) {}
+    }
+    return { version: 2, charId: String(charId), exportedAt: Date.now(), capsules, summaries, thirteenProvinces };
   }
 
   async function importCharBackup(charId, data) {
@@ -939,6 +968,11 @@
     for (const s of Array.isArray(data.summaries) ? data.summaries : []) {
       await dbPut(STORE_SUMMARIES, { ...s, charId: String(charId) });
       count++;
+    }
+    if (data.thirteenProvinces && global.ThirteenProvincesEngine && typeof global.ThirteenProvincesEngine.importCharArchive === "function") {
+      try {
+        count += await global.ThirteenProvincesEngine.importCharArchive(charId, data.thirteenProvinces);
+      } catch (e) {}
     }
     return count;
   }
@@ -1372,7 +1406,8 @@
           "挑选门是个守门的小校：先帮名士把翻出来的旧事过一遍筛子，跟眼下无关的统统挡在外头，免得你正高高兴兴聊着天，他突然提一嘴八百年前的陈芝麻烂谷子扫兴。",
         bullets: [
           "挑选门默认开启即可，会自动过滤无关和刚提过的旧记忆。",
-          "换手机或清浏览器前，记得进「⚙️ 向量与配置」点「💾 导出 JSON 备份」，就像商队留底账，丢不了。"
+          "🗺️ 东汉十三州密卷：点下方「打开东汉十三州密卷」可以按十三州查看/手动补记主公画像、信物与金兰契约定，点卷阁右上角「?」我再细拆给你听。",
+          "换手机或清浏览器前，记得进「⚙️ 向量与配置」点「💾 导出 JSON 备份」，连同十三州密卷一并留底账，丢不了。"
         ]
       }
     ];
@@ -1706,7 +1741,32 @@
             }
           },
           "打开记忆工作台（查看胶囊 / 日总结 / 向量配置）›"
-        )
+        ),
+        global.ThirteenProvincesEngine &&
+          h(
+            "button",
+            {
+              type: "button",
+              onClick: () =>
+                global.ThirteenProvincesEngine.openModal({
+                  charId,
+                  charName: chatData.name || (chatData.profile && chatData.profile.name) || "名士",
+                  userName: "主公"
+                }),
+              style: {
+                width: "100%",
+                padding: "8px",
+                borderRadius: "9px",
+                border: "1px solid rgba(168, 45, 45, 0.28)",
+                background: "linear-gradient(135deg, #FAF3EC 0%, #F7EAE6 100%)",
+                color: "#9B2C2C",
+                fontSize: "12px",
+                fontWeight: "700",
+                cursor: "pointer"
+              }
+            },
+            "🗺️ 打开东汉十三州密卷（主公画像 / 金兰契 / 绣衣卷宗）›"
+          )
       ),
       h(CompanionMemoryDrawerModal, {
         isOpen: drawerOpen,
@@ -1757,6 +1817,8 @@
     importCharBackup,
     computeEmbedding,
     cosineSimilarity,
+    callPickerLlmText,
+    loadRawHistoryForChar,
     CompanionMemoryEntryCard,
     CompanionMemoryDrawerModal
   };

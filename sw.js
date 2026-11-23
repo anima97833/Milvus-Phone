@@ -87,3 +87,33 @@ self.addEventListener('fetch', (event) => {
       })
   );
 });
+
+// 鸿雁传书 Phase 2：预留标准 Web Push 与通知点击回页唤起
+self.addEventListener('push', (event) => {
+  let payload = { title: '🕊️ 鸿雁传书', body: '有新的名士传讯到达' };
+  try {
+    if (event.data) payload = { ...payload, ...event.data.json() };
+  } catch (e) {
+    if (event.data) payload.body = event.data.text();
+  }
+  event.waitUntil(
+    self.registration.showNotification(payload.title || '🕊️ 鸿雁传书', {
+      body: payload.body || '',
+      icon: './icons/icon-192.png',
+      badge: './icons/icon-192.png',
+      data: payload
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ('focus' in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow('./index.html');
+    })
+  );
+});
