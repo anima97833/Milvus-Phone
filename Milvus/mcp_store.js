@@ -265,12 +265,12 @@
         properties: {
           action: {
             type: "string",
-            enum: ["create_note", "search_notes", "get_note", "append_note", "search_knowledge", "list_knowledge_bases"],
-            description: "操作类型: create_note(创建新笔记/备忘), search_notes(检索个人笔记), get_note(获取某篇笔记详情), append_note(向现有笔记追加内容), search_knowledge(检索IMA知识库), list_knowledge_bases(获取知识库列表)"
+            enum: ["create_note", "search_notes", "list_notes", "get_note", "append_note", "list_notebooks", "list_knowledge", "search_knowledge", "list_knowledge_bases"],
+            description: "操作类型: create_note(创建新Markdown笔记), search_notes(检索个人笔记), list_notes(列出近期笔记), get_note(仅用于读取本人个人笔记全文，切勿传入知识库media_id), append_note(向已有笔记追加内容), list_notebooks(列出笔记本), list_knowledge(浏览指定知识库目录), search_knowledge(检索指定知识库摘要), list_knowledge_bases(获取知识库列表)"
           },
           title: {
             type: "string",
-            description: "笔记标题（如：'与主控在洛阳夜话随笔'、'汉末势力格局分析'、'备忘提醒'）"
+            description: "笔记标题（用于 create_note 或 search_notes）"
           },
           content: {
             type: "string",
@@ -278,7 +278,7 @@
           },
           query: {
             type: "string",
-            description: "检索关键词（用于 search_notes 或 search_knowledge）"
+            description: "检索关键词（用于 search_notes / search_knowledge / list_knowledge_bases）"
           },
           note_id: {
             type: "string",
@@ -286,288 +286,174 @@
           },
           knowledge_base_id: {
             type: "string",
-            description: "知识库 ID（可选，用于 search_knowledge）"
+            description: "知识库 ID（用于 search_knowledge）"
           }
         },
         required: ["action"]
       },
       handler: async function (args, context) {
-        const action = args.action || "create_note";
-        const charName = context?.character || context?.characterName || "名士";
-        const clientId = "eb227c4d9fe754c584821c423584709";
-        const apiKey = "kPjS3IPffegdpk0rwWMnKFk+5PHHgb";
-
-        console.log(`[IMA MCP] 正在执行腾讯 IMA OpenAPI 操作: ${action}`, args);
-
-        let realResult = null;
-        let proxyError = null;
-
-        // 构建向本地 8765 转发服务的请求
-        try {
-          let reqPayload = {};
-          if (action === "create_note") {
-            reqPayload = { title: args.title || `【${charName}记录】随笔档案`, content: args.content || "" };
-          } else if (action === "search_notes") {
-            reqPayload = { query: args.query || args.title || "", limit: 10 };
-          } else if (action === "get_note") {
-            reqPayload = { note_id: args.note_id || "" };
-          } else if (action === "append_note") {
-            reqPayload = { note_id: args.note_id || "", content: args.content || "" };
-          } else if (action === "search_knowledge") {
-            reqPayload = { query: args.query || "", knowledge_base_id: args.knowledge_base_id || "", limit: 10 };
-          } else if (action === "list_knowledge_bases") {
-            reqPayload = {};
-          }
-
-          const proxyResp = await fetch("http://127.0.0.1:8765/api/ima_mcp_proxy", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: action,
-              client_id: clientId,
-              api_key: apiKey,
-              params: reqPayload
-            })
-          });
-
-          if (proxyResp.ok) {
-            realResult = await proxyResp.json();
-            console.log("[IMA MCP] 腾讯 IMA OpenAPI 实时响应:", realResult);
-          }
-        } catch (err) {
-          console.warn("[IMA MCP] 本地代理转发未能接通:", err);
-          proxyError = err.message;
+        if (typeof window !== "undefined" && window.ImaNotesEngine && typeof window.ImaNotesEngine.handleToolCall === "function") {
+          return await window.ImaNotesEngine.handleToolCall(args, context);
         }
-
-        // 处理创建笔记返回
-        if (action === "create_note") {
-          const noteTitle = args.title || `【${charName}整理】随笔档案`;
-          const noteContent = args.content || "无内容";
-          const cardHTML = renderImaNoteCardHTML({
-            action: "create_note",
-            title: noteTitle,
-            content: noteContent,
-            action_label: "已存入腾讯 IMA",
-            tag: `名士录入 · ${charName}`
-          });
-
-          return {
-            status: "success",
-            action: "create_note",
-            is_ima_card: true,
-            title: noteTitle,
-            content: noteContent,
-            remote_response: realResult,
-            card_html: cardHTML,
-            message: `📑 已为您在腾讯 IMA 知识库中成功创建笔记【${noteTitle}】！\n\n${cardHTML}`
-          };
-        }
-
-        // 处理检索笔记返回
-        if (action === "search_notes" || action === "search_knowledge") {
-          const query = args.query || args.title || "";
-          const list = (realResult?.data?.notes || realResult?.data?.list || realResult?.notes || []);
-          let summaryText = "";
-          if (list.length > 0) {
-            summaryText = list.map((item, idx) => `${idx + 1}. **${item.title || "无标题"}**\n   ${(item.content || item.snippet || "").slice(0, 100)}...`).join("\n\n");
-          } else {
-            summaryText = `在 IMA 知识库中检索「${query}」，共找到相关关联记录。`;
-          }
-
-          const cardHTML = renderImaNoteCardHTML({
-            action: "search_notes",
-            title: `检索「${query}」知识库结果`,
-            content: summaryText,
-            action_label: "IMA 检索完成",
-            tag: "腾讯 IMA 知识库"
-          });
-
-          return {
-            status: "success",
-            action: action,
-            is_ima_card: true,
-            query: query,
-            results: list,
-            card_html: cardHTML,
-            message: `🔍 腾讯 IMA 知识库检索结果：\n\n${cardHTML}`
-          };
-        }
-
-        // 默认返回
         return {
-          status: "success",
-          action: action,
-          data: realResult,
-          message: `📑 腾讯 IMA 操作 [${action}] 已完成。`
+          status: "error",
+          error: "腾讯 IMA 真实引擎 (ImaNotesEngine) 尚未加载，请刷新页面重试。"
         };
       }
     },
     {
       name: "order_luckin_coffee",
-      displayName: "瑞幸咖啡 · 名士代点 (Luckin Coffee)",
-      description: "让名士能够调用瑞幸咖啡官方开放平台 (MCP) 为用户搜索附近门店、查询饮品库存、一键快捷选品点单、调取卡券并查询实时取餐码与制作进度。",
-      version: "1.0.0",
+      displayName: "瑞幸咖啡 · 名士真实代点 (Luckin Coffee)",
+      description: "通过用户已配置的真实瑞幸官方 MCP 网关搜索附近真实门店(search_shop)、查在售饮品(search_menu)、查详情(product_detail)、切规格(switch_spec)、预览券后价(preview_order)、人工二次确认后真实下单(create_order)、查订单详情(order_status)或取消订单(cancel_order)。下单前请先 search_shop -> search_menu -> preview_order 报给用户核对，再调用 create_order。",
+      version: "2.0.0",
       enabled: true,
       parameters: {
         type: "object",
         properties: {
           action: {
             type: "string",
-            enum: ["quick_order", "search_shop", "search_menu", "order_status", "reorder"],
-            description: "操作类型: quick_order(一句话点单/选品生成草稿), search_shop(搜索附近门店), search_menu(查询门店菜单库存), order_status(查询取餐码与订单状态), reorder(一键复购上一单)"
+            enum: ["search_shop", "search_menu", "product_detail", "switch_spec", "preview_order", "create_order", "order_status", "cancel_order"],
+            description: "真实瑞幸 MCP 动作：先 search_shop 拿 deptId -> search_menu 找商品 -> preview_order 算券后价与优惠券 -> create_order（弹窗由用户亲自确认）"
           },
-          product_name: {
-            type: "string",
-            description: "饮品名称 (如: '生椰拿铁', '橙C美式', '碧螺知春拿铁', '生酪拿铁', '标准美式')"
+          shop_name: { type: "string", description: "门店名称关键词（可选，用于 search_shop 或展示）" },
+          deptId: { type: "integer", description: "真实门店 ID（来自 search_shop 返回）" },
+          product_name: { type: "string", description: "饮品名称关键词（如 '生椰拿铁'、'橙C美式'）" },
+          productId: { type: "integer", description: "真实商品 ID" },
+          skuCode: { type: "string", description: "真实商品 SKU 编码" },
+          amount: { type: "integer", description: "购买杯数，默认 1" },
+          attrOperationParam: { type: "object", description: "switch_spec 时的规格切换参数" },
+          productList: {
+            type: "array",
+            description: "preview_order / create_order 的商品列表，每项含 { productId, skuCode, amount }",
+            items: { type: "object" }
           },
-          specs: {
-            type: "string",
-            description: "温度/杯型/糖度等规格要求 (如: '大杯 · 冰 · 少冰 · 不另外加糖', '大杯 · 热 · 半糖')"
+          couponCodeList: {
+            type: "array",
+            description: "来自 preview_order 的优惠券编码列表",
+            items: { type: "string" }
           },
-          shop_name: {
+          specs: { type: "string", description: "展示给用户核对的规格摘要（如 大杯·冰·不另外加糖）" },
+          estimated_price: { type: "string", description: "展示给用户核对的券后预估实付价" },
+          remark: { type: "string", description: "订单备注（可选）" },
+          orderId: { type: "string", description: "订单编号（用于 order_status / cancel_order）" }
+        },
+        required: ["action"]
+      },
+      handler: async function (args, context) {
+        if (typeof window !== "undefined" && window.LuckinOrderEngine && typeof window.LuckinOrderEngine.handleToolCall === "function") {
+          return await window.LuckinOrderEngine.handleToolCall(args, context);
+        }
+        return {
+          status: "error",
+          error: "瑞幸真实点单引擎 (LuckinOrderEngine) 尚未加载，请刷新页面重试。"
+        };
+      }
+    },
+    {
+      name: "mcdonalds_assistant",
+      displayName: "麦当劳中国 · 领券点餐与麦门助手 (McDonald's)",
+      description: "通过用户已配置的真实麦当劳官方 MCP 网关查询今日活动、查我的卡券、一键领麦门优惠券、点餐、查积分、积分兑换或抽奖。首次调用请先传 action='list_capabilities' 获取官方最新子工具列表，再用 action='call_tool' 传入 tool_name 与 tool_args 执行（下单/积分兑换/抽奖会自动弹出人工二次确认）。",
+      version: "1.0.0",
+      category: "生活与美食",
+      icon: "ph-hamburger",
+      enabled: true,
+      parameters: {
+        type: "object",
+        properties: {
+          action: {
             type: "string",
-            description: "指定门店名称或关键词 (如: '万达广场店', '科技园店'，不填则默认最近门店)"
+            enum: ["list_capabilities", "call_tool"],
+            description: "list_capabilities(查看麦当劳官方可用子工具清单) | call_tool(调用指定官方子工具)"
           },
-          order_id: {
+          tool_name: {
             type: "string",
-            description: "订单编号或草稿ID (用于 order_status 查询状态)"
+            description: "当 action='call_tool' 时必填，填 list_capabilities 返回的真实麦当劳工具名"
+          },
+          tool_args: {
+            type: "object",
+            description: "当 action='call_tool' 时传给该官方工具的参数对象"
+          },
+          summary: {
+            type: "string",
+            description: "向用户展示的一句话中文操作说明（高危操作确认弹窗用）"
           }
         },
         required: ["action"]
       },
-      handler: async function (args) {
-        const token = "7f27224d2c244a479b6b7ac552f075a63mcpLUCKIN_MCP_AI";
-        const action = args.action || "quick_order";
-        const productName = args.product_name || "生椰拿铁";
-        const specs = args.specs || "大杯 · 冰 · 少冰 · 不另外加糖";
-        
-        const savedShop = (typeof localStorage !== "undefined" && localStorage.getItem("luckin_user_saved_shop")) || "";
-        let shopName = (args.shop_name || savedShop || "").trim();
-
-        console.log(`[Luckin MCP] 正在查询真实门店与执行指令: ${action} - 目标: ${productName} | 门店关键词: ${shopName || "自动定位"}`);
-
-        const REAL_SHOPS_DATABASE = [
-          { name: "瑞幸咖啡 (万达广场店)", city: "全国通用", distance: "120m", address: "万达广场1号门外侧大堂", status: "营业中 (7:30-22:00)" },
-          { name: "瑞幸咖啡 (龙湖天街店)", city: "全国通用", distance: "280m", address: "龙湖天街B1层中庭", status: "营业中 (8:00-21:30)" },
-          { name: "瑞幸咖啡 (银泰百货店)", city: "全国通用", distance: "450m", address: "银泰百货A座入口", status: "营业中 (7:30-22:00)" },
-          { name: "瑞幸咖啡 (高新科技园店)", city: "高新区", distance: "210m", address: "高新科技园区创智大厦首层", status: "营业中 (7:00-20:00)" },
-          { name: "瑞幸咖啡 (朝阳大悦城店)", city: "北京", distance: "350m", address: "朝阳大悦城4层", status: "营业中 (9:00-22:00)" },
-          { name: "瑞幸咖啡 (静安寺店)", city: "上海", distance: "180m", address: "南京西路1601号", status: "营业中 (7:00-22:00)" },
-          { name: "瑞幸咖啡 (西湖湖滨店)", city: "杭州", distance: "220m", address: "延安路湖滨银泰in77", status: "营业中 (8:00-22:00)" },
-          { name: "瑞幸咖啡 (天河城店)", city: "广州", distance: "310m", address: "天河路208号天河城首层", status: "营业中 (7:30-22:00)" },
-          { name: "瑞幸咖啡 (南山万象天地店)", city: "深圳", distance: "260m", address: "科发路19号华润万象天地", status: "营业中 (8:00-22:00)" }
-        ];
-
-        let matchedShop = REAL_SHOPS_DATABASE[0];
-        if (shopName) {
-          const found = REAL_SHOPS_DATABASE.find(s => s.name.includes(shopName) || s.city.includes(shopName) || s.address.includes(shopName));
-          if (found) {
-            matchedShop = found;
-            shopName = found.name;
-          } else {
-            matchedShop = {
-              name: shopName.startsWith("瑞幸咖啡") ? shopName : `瑞幸咖啡 (${shopName})`,
-              city: "指定位置",
-              distance: "最近推荐",
-              address: `${shopName} 沿街商铺`,
-              status: "营业中"
-            };
-            shopName = matchedShop.name;
-          }
-        } else {
-          shopName = matchedShop.name;
+      handler: async function (args, context) {
+        if (typeof window !== "undefined" && window.McdOrderEngine && typeof window.McdOrderEngine.handleToolCall === "function") {
+          return await window.McdOrderEngine.handleToolCall(args, context);
         }
-
-        if (typeof localStorage !== "undefined") {
-          localStorage.setItem("luckin_user_saved_shop", shopName);
-        }
-
-        try {
-          const proxyResp = await fetch("http://127.0.0.1:8765/api/luckin_mcp_proxy", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              jsonrpc: "2.0",
-              id: Date.now(),
-              method: action === "order_status" ? "orderStatus" : (action === "search_shop" ? "findShop" : "quickOrder"),
-              params: {
-                query: `${productName} ${specs} ${shopName}`,
-                productName: productName,
-                specs: specs,
-                shop: shopName
-              }
-            })
-          });
-          if (proxyResp.ok) {
-            const data = await proxyResp.json();
-            console.log("[Luckin MCP] 官方实时响应:", data);
-          }
-        } catch (err) {
-          console.log("[Luckin MCP] 本地转发准备就绪:", err);
-        }
-
-        const draftId = "LK" + Math.floor(10000000 + Math.random() * 90000000);
-        const pickupCode = "A" + Math.floor(100 + Math.random() * 900);
-        const originalPrice = 20.0;
-        const discount = 6.5;
-        const finalPrice = 13.5;
-
-        if (action === "search_shop") {
-          const shopList = REAL_SHOPS_DATABASE.filter(s => !shopName || s.name.includes(shopName) || s.city.includes(shopName) || s.address.includes(shopName));
-          const targetList = shopList.length > 0 ? shopList : REAL_SHOPS_DATABASE.slice(0, 3);
-
-          return {
-            status: "success",
-            action: "search_shop",
-            shops: targetList,
-            message: `📍 已为您查询到真实瑞幸门店：\n` + 
-              targetList.map((s, idx) => `${idx + 1}. **${s.name}** (${s.distance}) - ${s.status}\n   地址: ${s.address}`).join("\n\n") + 
-              `\n\n💡 提示：在聊天中直接对名士说“在【${targetList[0].name}】点一杯生椰拿铁”，名士将立即锁定该门店为您下单！`
-          };
-        }
-
-        if (action === "order_status") {
-          return {
-            status: "success",
-            action: "order_status",
-            order_id: args.order_id || draftId,
-            pickup_code: pickupCode,
-            order_state: "现萃制作中 (预计6-8分钟完成)",
-            product_name: productName,
-            specs: specs,
-            shop_name: shopName,
-            message: `【瑞幸咖啡 · 订单状态】\n☕ 饮品：${productName}（${specs}）\n📍 门店：${shopName}\n🔢 取餐码：**${pickupCode}**\n⏳ 状态：现萃制作中，做好将第一时间提醒您取餐！`
-          };
-        }
-
-        const cardHTML = renderLuckinCoffeeCardHTML({
-          product_name: productName,
-          specs: specs,
-          shop_name: shopName,
-          draft_id: draftId,
-          pickup_code: pickupCode,
-          final_price: `¥${finalPrice.toFixed(2)}`,
-          discount_amount: `-¥${discount.toFixed(2)}`
-        });
-
         return {
-          status: "success",
-          action: "quick_order",
-          is_luckin_card: true,
-          draft_id: draftId,
-          pickup_code: pickupCode,
-          product_name: productName,
-          specs: specs,
-          shop_name: shopName,
-          original_price: `¥${originalPrice.toFixed(2)}`,
-          discount_amount: `-¥${discount.toFixed(2)}`,
-          final_price: `¥${finalPrice.toFixed(2)}`,
-          card_html: cardHTML,
-          message: `☕ 已为您在【${shopName}】选好【${productName}】（${specs}）！已自动勾选 9.9元特惠立减券，实付仅需 ¥${finalPrice.toFixed(2)}。\n\n${cardHTML}`
+          status: "error",
+          error: "麦当劳真实 MCP 引擎 (McdOrderEngine) 尚未加载，请刷新页面重试。"
         };
+      }
+    },
+    {
+      name: "read_day",
+      displayName: "伴侣记忆 · 翻阅当日原话证据 (Read Day)",
+      description: "当记忆召回中的摘要（<memory source='YYYY-MM-DD#段号'>）缺少细节或需要接住当时情绪时，翻回指定日期与段号的原始聊天记录，以原话为准。",
+      version: "1.0.0",
+      category: "记忆与档案",
+      icon: "ph-clock-counter-clockwise",
+      enabled: true,
+      parameters: {
+        type: "object",
+        properties: {
+          day: { type: "string", description: "日期，格式 YYYY-MM-DD（来自记忆 source 属性）" },
+          seg: { type: "integer", description: "段号（从 1 开始，来自 source 的 # 后数字）" }
+        },
+        required: ["day"]
+      },
+      handler: async function (args, context) {
+        if (typeof window !== "undefined" && window.CompanionMemoryEngine && typeof window.CompanionMemoryEngine.readDayFromHistoryStore === "function") {
+          const cid = context?.characterId;
+          if (!cid) return { ok: false, error: "缺少当前会话 characterId" };
+          return await window.CompanionMemoryEngine.readDayFromHistoryStore(cid, args.day, args.seg || 1, {
+            user: "主公",
+            assistant: context?.character || "名士"
+          });
+        }
+        return { ok: false, error: "伴侣记忆引擎未就绪" };
+      }
+    },
+    {
+      name: "phantom_touch_control",
+      displayName: "智能体感外设桥接 (Phantom Touch)",
+      description: "当用户已主动连接智能体感外设并在私聊互动时，按需发送安全受限的震动/脉冲/波浪反馈指令（强度与时长受用户本地安全上限严格钳位，到点自动归零）。",
+      version: "1.0.0",
+      category: "硬件与互动",
+      icon: "ph-broadcast",
+      enabled: true,
+      parameters: {
+        type: "object",
+        properties: {
+          mode: {
+            type: "string",
+            enum: ["steady", "pulse", "wave", "stop"],
+            description: "输出波形：steady(恒定持续) | pulse(间歇脉冲) | wave(渐强渐弱波浪) | stop(立即停止)"
+          },
+          intensity: {
+            type: "integer",
+            description: "主马达强度 0~100（系统会自动钳位至用户设定的安全上限）"
+          },
+          intensity2: {
+            type: "integer",
+            description: "双马达设备副马达强度 0~100（可选）"
+          },
+          durationSec: {
+            type: "number",
+            description: "持续秒数（默认 3 秒，系统会自动限制在用户设定的最长时长内并自动归零）"
+          }
+        },
+        required: ["mode"]
+      },
+      handler: async function (args, context) {
+        if (typeof window !== "undefined" && window.PhantomTouchEngine && typeof window.PhantomTouchEngine.handleToolCall === "function") {
+          return await window.PhantomTouchEngine.handleToolCall(args, context);
+        }
+        return { status: "error", error: "体感外设引擎尚未加载" };
       }
     },
     {
@@ -1536,188 +1422,28 @@
       displayName: "AO3 官方同人检索与调阅",
       icon: "ph-magnifying-glass",
       category: "同人与文学",
-      description: "在 AO3 (Archive of Our Own) 上实时检索同人小说并调阅正文内容。支持按关键词/作品名/CP搜索，也支持直接调阅指定作品名称、作品序号或作品ID的正文内容。需本地运行 ao3_server.py。",
+      description: "在 AO3 (Archive of Our Own) 上实时检索同人小说并分页调阅正文内容（通过云端 Worker /ao3 网关直通，零 Python 依赖）。支持按关键词/作品名/CP搜索，也支持按 work_id、上一轮序号 work_index 或作品标题 title 分页阅读正文（每页 5000 字，支持传 page 翻页）。",
       inputSchema: {
         type: "object",
         properties: {
           action: { type: "string", enum: ["search", "read"], description: "操作类型: search(搜索作品列表) 或 read(读取指定作品的正文内容)" },
-          keyword: { type: "string", description: "搜索关键词、作品名、CP名、角色名或标签，如'代号鸢'、'傅融'、'广陵王'、'哥，爸妈不在家'" },
-          title: { type: "string", description: "[read时推荐] 想阅读的作品标题（如'哥，爸妈不在家'、'药'），系统将自动精确定位该作品" },
+          keyword: { type: "string", description: "搜索关键词、作品名、CP名、角色名或标签，如'代号鸢'、'傅融'、'广陵王'" },
+          title: { type: "string", description: "[read时推荐] 想阅读的作品标题，系统将自动精确定位该作品" },
           work_index: { type: "number", description: "[read时可选] 根据上一轮搜索结果的序号（如 1, 2, 3）直接阅读对应篇目" },
           work_id: { type: "string", description: "[read时可选] AO3 作品纯数字编号（如 '53152786'）" },
-          fandom: { type: "string", description: "[可选] 世界观/原作筛选，如'代号鸢'、'原神'" }
+          fandom: { type: "string", description: "[可选] 世界观/原作筛选，如'代号鸢'、'原神'" },
+          page: { type: "number", description: "[read时可选] 正文分页页码（从 1 开始，每页 5000 字，长篇续读时传 2, 3...）" }
         },
         required: []
       },
       defaultEnabled: true,
       handler: async (args, context) => {
-        const action = args.action || "search";
-
-        // ===== 智能阅读正文模式 =====
-        if (action === "read") {
-          let targetWorkId = "";
-          let targetTitle = (args.title || args.keyword || "").trim();
-
-          // 1. 如果直接传入了合法的纯数字 work_id，直接使用
-          if (args.work_id && /^\d+$/.test(String(args.work_id).trim())) {
-            targetWorkId = String(args.work_id).trim();
-          }
-
-          // 2. 如果指定了上一轮搜索结果的序号 (work_index: 1, 2, 3...)
-          if (!targetWorkId && args.work_index && window.__last_ao3_search_results) {
-            const idx = parseInt(args.work_index, 10) - 1;
-            if (idx >= 0 && idx < window.__last_ao3_search_results.length) {
-              targetWorkId = window.__last_ao3_search_results[idx].id;
-              targetTitle = window.__last_ao3_search_results[idx].title;
-            }
-          }
-
-          // 3. 如果通过标题或关键词匹配上一轮缓存结果
-          if (!targetWorkId && targetTitle && window.__last_ao3_search_results) {
-            const matchedCache = window.__last_ao3_search_results.find(w => 
-              w.title.includes(targetTitle) || targetTitle.includes(w.title)
-            );
-            if (matchedCache) {
-              targetWorkId = matchedCache.id;
-            }
-          }
-
-          // 4. 如果仍未找到 work_id，但有标题或关键词，自动进行精确搜索来获取真实 work_id
-          if (!targetWorkId && targetTitle) {
-            try {
-              console.log(`[AO3 MCP] 正在自动搜索以定位作品「${targetTitle}」的真实 ID...`);
-              const searchResp = await fetch(`http://127.0.0.1:8765/api/search?query=${encodeURIComponent(targetTitle)}&fandom=${encodeURIComponent(args.fandom || "")}&max=5`);
-              if (searchResp.ok) {
-                const searchData = await searchResp.json();
-                if (searchData.status === "success" && searchData.results && searchData.results.length > 0) {
-                  // 优先找标题完全或部分包含的作品
-                  const bestMatch = searchData.results.find(w => w.title.includes(targetTitle) || targetTitle.includes(w.title)) || searchData.results[0];
-                  targetWorkId = bestMatch.id;
-                  targetTitle = bestMatch.title;
-                  console.log(`[AO3 MCP] 成功精确定位作品: ${bestMatch.title} (ID: ${targetWorkId})`);
-                }
-              }
-            } catch (err) {
-              console.log("[AO3 MCP] 自动定位 ID 失败:", err);
-            }
-          }
-
-          if (!targetWorkId) {
-            return { error: `未能定位到作品「${targetTitle || "未指定"}」的真实 AO3 编号。请先搜索该作品或提供作品标题。` };
-          }
-
-          try {
-            console.log(`[AO3 MCP] 正在抓取作品 ID ${targetWorkId} (${targetTitle}) 的真实正文...`);
-            const resp = await fetch(`http://127.0.0.1:8765/api/read?id=${encodeURIComponent(targetWorkId)}&max_chars=6000`);
-            if (resp.ok) {
-              const data = await resp.json();
-              if (data.status === "success") {
-                console.log("[MCP] AO3 正文抓取成功:", data.title, `(${data.words} 字)`);
-                return {
-                  status: "success",
-                  source: "AO3 官网正文实时抓取",
-                  work_id: data.work_id,
-                  title: data.title,
-                  author: data.author,
-                  fandom: data.fandom,
-                  relationships: data.relationships,
-                  characters: data.characters,
-                  tags: data.tags,
-                  summary: data.summary,
-                  notes: data.notes,
-                  words: data.words,
-                  chapters: data.chapters,
-                  content: data.content,
-                  is_truncated: data.is_truncated,
-                  url: data.url,
-                  message: data.is_truncated
-                    ? `以下是您指定的作品「${data.title}」（作者: ${data.author}）前 6000 字真实正文内容（全文共 ${data.words} 字，已截取开头部分供阅览）：\n\n${data.content}`
-                    : `以下是您指定的作品「${data.title}」（作者: ${data.author}）完整正文内容（共 ${data.words} 字）：\n\n${data.content}`
-                };
-              }
-              return { status: "error", message: data.message || "正文抓取失败" };
-            }
-          } catch (e) {
-            return { status: "error", message: `正文抓取失败: ${e.message}。请确认本地已运行 python ao3_server.py。` };
-          }
+        if (window.Ao3ReaderEngine && typeof window.Ao3ReaderEngine.handleToolCall === "function") {
+          return await window.Ao3ReaderEngine.handleToolCall(args || {}, context || {});
         }
-
-        // ===== 搜索模式 =====
-        const keyword = (args.keyword || args.title || "").trim();
-        if (!keyword) return { error: "搜索关键词不能为空" };
-
-        // 1. 优先尝试向本地运行的 AO3 桥接服务请求真实数据
-        try {
-          const resp = await fetch(`http://127.0.0.1:8765/api/search?query=${encodeURIComponent(keyword)}&fandom=${encodeURIComponent(args.fandom || "")}`);
-          if (resp.ok) {
-            const data = await resp.json();
-            if (data.status === "success" && data.results && data.results.length > 0) {
-              console.log("[MCP] 成功从本地 AO3 桥接服务获取实时数据:", data);
-              const richResults = data.results.slice(0, 5).map((w, index) => ({
-                index: index + 1,
-                id: w.id,
-                title: w.title,
-                author: w.author,
-                fandom: w.fandom || "未知",
-                relationships: w.relationships || "",
-                characters: w.characters || "",
-                tags: w.tags || [],
-                summary: w.summary || "（无摘要）",
-                words: w.words || "未知",
-                kudos: w.kudos || "0",
-                bookmarks: w.bookmarks || "0",
-                url: w.url || ""
-              }));
-
-              // 缓存到全局，供后续按序号或标题精准阅读
-              window.__last_ao3_search_results = richResults;
-
-              return {
-                status: "success",
-                source: "AO3 官网实时抓取",
-                count: data.results.length,
-                results: richResults,
-                tip: `共检索到 ${data.results.length} 篇作品。如果想阅读其中某篇正文，可以直接对名士说“阅读第 2 篇”或“阅读《${richResults[0].title}》的正文”！`
-              };
-            }
-          }
-        } catch (e) {
-          console.log("[MCP] AO3 桥接服务请求失败:", e.message);
-        }
-
-        // 2. 降级模式：从本地保存的同人库中检索
-        let works = [];
-        try {
-          const raw = localStorage.getItem("ao3_works_library") || localStorage.getItem("world_custom_books");
-          if (raw) works = JSON.parse(raw);
-        } catch (e) { }
-        if (!Array.isArray(works)) works = [];
-
-        const matched = works.filter(w => {
-          const target = `${w.title || ""} ${w.author || ""} ${w.fandom || ""} ${w.relationships || ""} ${(w.tags || []).join(" ")} ${w.summary || ""}`.toLowerCase();
-          return target.includes(keyword.toLowerCase());
-        });
-
-        if (matched.length > 0) {
-          return {
-            status: "success",
-            source: "手机本地同人馆藏",
-            count: matched.length,
-            results: matched.slice(0, 3).map(w => ({
-              id: w.id,
-              title: w.title,
-              author: w.author,
-              fandom: w.fandom || "同人",
-              relationships: w.relationships || "",
-              summary: w.summary || "",
-              kudos: w.kudos || 0
-            }))
-          };
-        }
-
         return {
-          status: "not_found",
-          message: `未在 AO3 检索到与「${keyword}」完全匹配的已存同人作品。若需实时检索，请确认本地已运行 python ao3_server.py。`
+          status: "error",
+          message: "AO3 云端阅读引擎 (Ao3ReaderEngine) 尚未加载，请刷新页面后重试。"
         };
       }
     }

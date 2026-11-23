@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>转换工坊 · 音律训练简谱制作</title>
+  <style>
+    :root {
+      --bg: #F9F7F1;
+      --card: #FFFFFF;
+      --card-soft: #FBF9F4;
+      --border: #E5DFD2;
+      --border-strong: #D2C6B0;
+      --ink: #34302B;
+      --muted: #787065;
+      --accent: #55727A;
+      --accent-soft: #EEF4F5;
+      --warm: #9B6E43;
+      --warm-soft: #FBF4E7;
+      --danger: #B85C4F;
+      --ok: #46785A;
+      --radius: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      line-height: 1.5;
+    }
+
+    .page {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 18px 14px 48px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* 顶栏 */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 4px 2px 6px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: var(--ink);
+    }
+
+    .brand p {
+      margin: 2px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pill-btn {
+      border: 1px solid var(--border-strong);
+      background: var(--card);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.16s ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .pill-btn:hover {
+      background: var(--warm-soft);
+      border-color: var(--warm);
+      color: var(--warm);
+    }
+
+    /* 语法速查折叠卡 */
+    .guide-box {
+      display: none;
+      background: var(--warm-soft);
+      border: 1px solid #E5D6BC;
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      font-size: 12px;
+      color: #5C4731;
+      line-height: 1.7;
+    }
+
+    .guide-box.open {
+      display: block;
+    }
+
+    .guide-box code {
+      background: rgba(255, 255, 255, 0.75);
+      border: 1px solid #E4D5BB;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11.5px;
+    }
+
+    /* 模式切换胶囊 */
+    .mode-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      background: #EFECE3;
+      padding: 4px;
+      border-radius: 12px;
+    }
+
+    .mode-tab {
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 13.5px;
+      font-weight: 700;
+      padding: 10px 8px;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .mode-tab.active {
+      background: var(--card);
+      color: var(--ink);
+      box-shadow: 0 2px 8px rgba(45, 38, 28, 0.08);
+    }
+
+    /* 通用卡片 */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: 0 2px 12px rgba(55, 45, 30, 0.03);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .card-sub {
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+
+    /* MIDI 上传拖拽区 */
+    .dropzone {
+      border: 1.5px dashed var(--border-strong);
+      border-radius: 12px;
+      background: var(--card-soft);
+      padding: 22px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .dropzone.dragover,
+    .dropzone:hover {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .dropzone-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 4px;
+    }
+
+    .dropzone-hint {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* 轨道列表 */
+    .track-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .track-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--card-soft);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .track-item.selected {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .track-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .track-name {
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 240px;
+    }
+
+    .badge-rec {
+      background: var(--warm);
+      color: #FFF;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 999px;
+      flex-shrink: 0;
+    }
+
+    .track-meta {
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    /* 参数表单网格 */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    @media (max-width: 520px) {
+      .grid-3 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .field label {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--border-strong);
+      border-radius: 9px;
+      background: var(--card-soft);
+      color: var(--ink);
+      font-size: 13px;
+      padding: 8px 10px;
+      outline: none;
+      font-family: inherit;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: var(--accent);
+      background: #FFFFFF;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 120px;
+      line-height: 1.65;
+    }
+
+    textarea.mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      min-height: 165px;
+    }
+
+    .check-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: center;
+      font-size: 12px;
+      color: var(--ink);
+    }
+
+    .check-row label {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .chip-btn {
+      border: 1px solid var(--border-strong);
+      background: var(--card-soft);
+      color: var(--muted);
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+
+    .chip-btn:hover {
+      border-color: var(--warm);
+      color: var(--warm);
+      background: var(--warm-soft);
+    }
+
+    /* 按钮 */
+    .btn {
+      border: 1px solid var(--border-strong);
+      background: var(--card);
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.16s ease;
+    }
+
+    .btn:hover {
+      filter: brightness(0.97);
+    }
+
+    .btn:disabled {
+      opacity: 0.48;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #FFFFFF;
+    }
+
+    .btn-warm {
+      background: var(--warm);
+      border-color: var(--warm);
+      color: #FFFFFF;
+    }
+
+    .btn-soft {
+      background: var(--warm-soft);
+      border-color: #E2D1B5;
+      color: #6B4927;
+    }
+
+    /* 体检状态条 */
+    .diag-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 11px;
+      border-radius: 9px;
+      background: #F4F6F5;
+      border: 1px solid #E1E8E6;
+      font-size: 12px;
+      color: #46575C;
+    }
+
+    .diag-warn {
+      padding: 7px 10px;
+      border-radius: 8px;
+      background: #FDF3EF;
+      border: 1px solid #ECCAC1;
+      color: var(--danger);
+      font-size: 12px;
+    }
+
+    .preview-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .preview-controls select {
+      width: auto;
+      min-width: 130px;
+      flex: 1;
+    }
+
+    .export-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    @media (max-width: 520px) {
+      .export-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .file-tip {
+      display: none;
+      font-size: 11.5px;
+      color: var(--muted);
+      background: var(--card-soft);
+      border: 1px dashed var(--border-strong);
+      border-radius: 9px;
+      padding: 8px 10px;
+      line-height: 1.55;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%) translateY(16px);
+      background: rgba(42, 38, 33, 0.92);
+      color: #FFFDF8;
+      padding: 9px 18px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.22s ease;
+      z-index: 999;
+      white-space: nowrap;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page">
+    <!-- 顶栏 -->
+    <header class="topbar">
+      <div class="brand">
+        <h1>转换工坊</h1>
+        <p>修武扬文 · 音律训练专用简谱制作台</p>
+      </div>
+      <div class="top-actions">
+        <button type="button" class="pill-btn" id="btnToggleGuide">语法速查</button>
+        <a class="pill-btn" href="index.html">返回小手机</a>
+      </div>
+    </header>
+
+    <!-- 语法速查折叠卡 -->
+    <section class="guide-box" id="guideBox">
+      <strong>小手机简谱标准语法：</strong><br />
+      • 音高：<code>1</code>~<code>7</code> 对应 7 条音轨，<code>0</code> 为休止符，<code>#</code>/<code>b</code> 升降半音<br />
+      • 八度：<code>1'</code> 高八度、<code>1''</code> 倍高音；<code>5,</code> 低八度、<code>5,,</code> 倍低音<br />
+      • 节奏：<code>-</code> 延长 1 拍；<code>(35)</code> 括号内平分 1 拍（快音）；<code>[135]</code> 和弦同时按；<code>|</code> 小节线
+    </section>
+
+    <!-- 模式切换 -->
+    <nav class="mode-tabs" role="tablist">
+      <button type="button" class="mode-tab active" data-mode="midi">🎹 MIDI 转简谱</button>
+      <button type="button" class="mode-tab" data-mode="wild">✨ 野生谱清洗</button>
+    </nav>
+
+    <!-- 模式 A：MIDI 导入 -->
+    <section class="card" id="panelMidi">
+      <div class="card-head">
+        <div class="card-title">1. 导入 MIDI 文件（.mid / .midi）</div>
+        <div class="card-sub">纯本地离线解析 · 自动过滤鼓组</div>
+      </div>
+
+      <div class="dropzone" id="midiDropzone">
+        <div class="dropzone-title" id="midiDropTitle">点击选择或拖拽 .mid 文件至此</div>
+        <div class="dropzone-hint" id="midiDropHint">支持 MuseScore / 虫虫钢琴 / 弹琴吧导出的任意标准 MIDI</div>
+        <input type="file" id="midiFileInput" accept=".mid,.midi,audio/midi,audio/x-midi" class="hidden" />
+      </div>
+
+      <!-- 解析后的轨道与参数面板 -->
+      <div id="midiConfigWrap" class="hidden" style="display:flex;flex-direction:column;gap:12px;">
+        <div>
+          <div class="card-head" style="margin-bottom:6px;">
+            <span class="card-title" style="font-size:13px;">选择旋律轨道</span>
+            <span class="card-sub" id="midiFileSummary"></span>
+          </div>
+          <div class="track-list" id="midiTrackList"></div>
+        </div>
+
+        <div class="grid-3">
+          <div class="field">
+            <label>曲名</label>
+            <input type="text" id="midiTitle" value="MIDI 简谱" />
+          </div>
+          <div class="field">
+            <label>调号 (@key)</label>
+            <select id="midiKey">
+              <option value="auto">自动最优定调</option>
+              <option value="C">C 调</option>
+              <option value="G">G 调</option>
+              <option value="D">D 调</option>
+              <option value="F">F 调</option>
+              <option value="A">A 调</option>
+              <option value="Bb">Bb 调</option>
+              <option value="E">E 调</option>
+              <option value="Eb">Eb 调</option>
+              <option value="B">B 调</option>
+              <option value="Ab">Ab 调</option>
+              <option value="F#">F# 调</option>
+              <option value="Db">Db 调</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>速度 (BPM)</label>
+            <input type="number" id="midiBpm" min="30" max="260" value="100" />
+          </div>
+          <div class="field">
+            <label>量化粒度</label>
+            <select id="midiGrid">
+              <option value="0.5" selected>八分音符（推荐）</option>
+              <option value="0.25">十六分音符（精细）</option>
+              <option value="1">四分音符（极简）</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>谱面手感模式</label>
+            <select id="midiChordMode">
+              <option value="skyline" selected>单音主旋律（推荐）</option>
+              <option value="duo">双拇指双押（最多2音）</option>
+              <option value="chord">完整和弦（最多3音）</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>八度微调</label>
+            <select id="midiOctave">
+              <option value="0" selected>自动居中</option>
+              <option value="1">整体升高八度 (+1)</option>
+              <option value="-1">整体降低八度 (-1)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <div class="field">
+            <label>起始小节</label>
+            <input type="number" id="midiStartBar" min="1" value="1" />
+          </div>
+          <div class="field">
+            <label>结束小节</label>
+            <input type="number" id="midiEndBar" min="1" value="32" />
+          </div>
+          <div class="field">
+            <label>防抽筋颤音过滤</label>
+            <select id="midiMinGap">
+              <option value="90" selected>标准（90ms）</option>
+              <option value="140">宽松（140ms）</option>
+              <option value="0">关闭（保留全部）</option>
+            </select>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-primary" id="btnConvertMidi">刷新生成标准简谱</button>
+      </div>
+    </section>
+
+    <!-- 模式 B：野生谱清洗 -->
+    <section class="card hidden" id="panelWild">
+      <div class="card-head">
+        <div class="card-title">1. 粘贴野生简谱 / 键盘谱</div>
+        <div class="chip-row">
+          <button type="button" class="chip-btn" id="btnSampleWild">填入野生谱示例</button>
+          <button type="button" class="chip-btn" id="btnSampleSky">填入光遇键谱示例</button>
+        </div>
+      </div>
+
+      <textarea id="wildInput"
+        placeholder="直接粘贴从 B 站、小红书、光遇/原神弹琴站复制的简谱或字母谱，例如：&#10;主歌：+1 6 5- 3 ①② （35）&#10;或光遇 21 键：A S D G H Q W E"></textarea>
+
+      <div class="grid-3">
+        <div class="field">
+          <label>曲名</label>
+          <input type="text" id="wildTitle" value="自制简谱" />
+        </div>
+        <div class="field">
+          <label>方言识别</label>
+          <select id="wildDialect">
+            <option value="auto" selected>自动识别方言</option>
+            <option value="standard">通用数字方言（+1/-5/①）</option>
+            <option value="sky_genshin">光遇 / 原神 21 键（Q-U/A-J/Z-M）</option>
+            <option value="solfege">唱名谱（do re mi fa sol）</option>
+            <option value="note_names">科学音名（C4 D4 E4）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>速度 (BPM)</label>
+          <input type="number" id="wildBpm" min="30" max="260" value="96" />
+        </div>
+      </div>
+
+      <div class="check-row">
+        <label><input type="checkbox" id="wildDashLow" /> 强制将 <code>5-</code> / <code>-5</code> 视为低音
+          <code>5,</code></label>
+        <label><input type="checkbox" id="wildAutoBar" checked /> 自动按 4 拍补小节线</label>
+      </div>
+
+      <button type="button" class="btn btn-primary" id="btnCleanWild">✨ 一键清洗为标准简谱</button>
+    </section>
+
+    <!-- 公共输出：预览、试听与导出 -->
+    <section class="card">
+      <div class="card-head">
+        <div class="card-title">2. 标准简谱预览与试听（可直接手动微调）</div>
+        <div class="card-sub" id="dialectBadge">等待生成</div>
+      </div>
+
+      <textarea id="outputNotation" class="mono" placeholder="转换后的标准简谱将显示在这里，你可以随时手动修改个别音符并点击试听..."></textarea>
+
+      <div class="diag-bar" id="diagBar">
+        <span>尚未载入简谱</span>
+        <span>0 音 · 约 0s</span>
+      </div>
+      <div class="diag-warn hidden" id="diagWarn"></div>
+
+      <div class="preview-controls">
+        <select id="previewInstrument" title="选择试听音色"></select>
+        <button type="button" class="btn btn-soft" id="btnPlayPreview">▶ 试听预览</button>
+        <button type="button" class="btn" id="btnStopPreview" disabled>⏹ 停止</button>
+      </div>
+
+      <div class="export-grid">
+        <button type="button" class="btn" id="btnCopy">📋 复制简谱</button>
+        <button type="button" class="btn" id="btnDownload">💾 导出 .txt</button>
+        <button type="button" class="btn btn-warm" id="btnSavePhone">⭐ 存入小手机曲库</button>
+      </div>
+
+      <div class="file-tip" id="fileProtocolTip">
+        提示：当前以本地文件（<code>file://</code>）直接打开。若回到小手机曲库中未看到刚存入的曲目，请使用「复制简谱」或「导出 .txt」导入小手机。
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- 复用小手机现有民乐音色引擎与简谱解析器 -->
+  <script src="Milvus/music_synth_beatforge.js"></script>
+  <script src="Milvus/music_rhythm_engine.js"></script>
+  <script src="Milvus/jianpu_workshop_engine.js"></script>
+  <script>
+    (function () {
+      "use strict";
+
+      const E = window.JianpuWorkshopEngine;
+      const Synth = window.BeatForgeSynth;
+      const Rhythm = window.MusicRhythmEngine;
+
+      const $ = (id) => document.getElementById(id);
+
+      // 状态
+      let currentParsedMidi = null;
+      let selectedTrackIndices = new Set();
+      let audioCtx = null;
+      let previewTimers = [];
+      let isPlaying = false;
+
+      function showToast(msg) {
+        const el = $("toast");
+        el.textContent = msg;
+        el.classList.add("show");
+        clearTimeout(el._t);
+        el._t = setTimeout(() => el.classList.remove("show"), 2200);
+      }
+
+      // 初始化 10 种民乐音色下拉框
+      const instSelect = $("previewInstrument");
+      const instList = (Synth && Array.isArray(Synth.INSTRUMENTS))
+        ? Synth.INSTRUMENTS
+        : [{ id: "guzheng", name: "古筝", icon: "🎋" }];
+      instSelect.innerHTML = instList
+        .map((it) => `<option value="${it.id}">${it.icon || "🎵"} ${it.name}</option>`)
+        .join("");
+
+      if (location.protocol === "file:") {
+        $("fileProtocolTip").style.display = "block";
+      }
+
+      // 语法速查折叠
+      $("btnToggleGuide").addEventListener("click", () => {
+        $("guideBox").classList.toggle("open");
+      });
+
+      // 模式切换
+      document.querySelectorAll(".mode-tab").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".mode-tab").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          const mode = btn.dataset.mode;
+          $("panelMidi").classList.toggle("hidden", mode !== "midi");
+          $("panelWild").classList.toggle("hidden", mode !== "wild");
+        });
+      });
+
+      // 实时体检更新
+      function refreshDiagnosis() {
+        const text = $("outputNotation").value;
+        const diag = E.diagnoseJianpu(text);
+        const accPct = Math.round((diag.accidentalRate || 0) * 100);
+        $("diagBar").innerHTML = `
+          <span>${diag.ok ? "✅ 语法完全兼容小手机 7 轨引擎" : "⚠️ 请检查下方提示"}</span>
+          <span><strong>${diag.noteCount}</strong> 音 · 约 <strong>${diag.totalDuration}s</strong> · 升降号 ${accPct}%</span>
+        `;
+        if (diag.warnings.length > 0) {
+          $("diagWarn").textContent = diag.warnings.join("；");
+          $("diagWarn").classList.remove("hidden");
+        } else {
+          $("diagWarn").classList.add("hidden");
+        }
+      }
+
+      $("outputNotation").addEventListener("input", () => {
+        refreshDiagnosis();
+      });
+
+      // 同步输出头中的 @instrument
+      instSelect.addEventListener("change", () => {
+        const val = $("outputNotation").value;
+        if (!val.trim()) return;
+        if (/^@instrument\s+.+$/m.test(val)) {
+          $("outputNotation").value = val.replace(/^@instrument\s+.+$/m, `@instrument ${instSelect.value}`);
+        }
+        refreshDiagnosis();
+      });
+
+      // ==========================================
+      // MIDI 导入与转换逻辑
+      // ==========================================
+      function renderTrackList(parsed) {
+        const wrap = $("midiTrackList");
+        wrap.innerHTML = "";
+        parsed.tracks.forEach((tr) => {
+          const checked = selectedTrackIndices.has(tr.index);
+          const item = document.createElement("label");
+          item.className = "track-item" + (checked ? " selected" : "");
+          item.innerHTML = `
+            <span class="track-left">
+              <input type="checkbox" ${checked ? "checked" : ""} data-idx="${tr.index}" />
+              <span class="track-name" title="${tr.name}">${tr.name}</span>
+              ${tr.recommended ? '<span class="badge-rec">推荐主旋律</span>' : ""}
+            </span>
+            <span class="track-meta">${tr.noteCount} 音 · 均高 ${tr.avgMidi}</span>
+          `;
+          item.querySelector("input").addEventListener("change", (ev) => {
+            if (ev.target.checked) selectedTrackIndices.add(tr.index);
+            else selectedTrackIndices.delete(tr.index);
+            item.classList.toggle("selected", ev.target.checked);
+            runMidiConvert();
+          });
+          wrap.appendChild(item);
+        });
+      }
+
+      function runMidiConvert() {
+        if (!currentParsedMidi) return;
+        if (selectedTrackIndices.size === 0) {
+          showToast("请至少勾选一条旋律轨道");
+          return;
+        }
+        try {
+          const res = E.convertMidiToJianpu(currentParsedMidi, {
+            trackIndices: Array.from(selectedTrackIndices),
+            title: $("midiTitle").value.trim() || "MIDI 简谱",
+            key: $("midiKey").value,
+            bpm: Number($("midiBpm").value) || currentParsedMidi.bpm,
+            gridStep: Number($("midiGrid").value) || 0.5,
+            chordMode: $("midiChordMode").value,
+            octaveShift: Number($("midiOctave").value) || 0,
+            startMeasure: Number($("midiStartBar").value) || 1,
+            endMeasure: Number($("midiEndBar").value) || currentParsedMidi.totalMeasures,
+            minGapMs: Number($("midiMinGap").value),
+            instrument: instSelect.value
+          });
+          $("outputNotation").value = res.notation;
+          $("dialectBadge").textContent = `MIDI · ${res.meta.key} 调 · ${res.meta.measures} 小节`;
+          refreshDiagnosis();
+        } catch (err) {
+          showToast(err.message || "MIDI 转换失败");
+        }
+      }
+
+      async function handleMidiFile(file) {
+        if (!file) return;
+        try {
+          const buf = await file.arrayBuffer();
+          const parsed = E.parseMidiFile(buf);
+          if (!parsed.tracks.length) {
+            showToast("该 MIDI 文件中没有检测到可弹奏的旋律轨道");
+            return;
+          }
+          currentParsedMidi = parsed;
+          const baseName = file.name.replace(/\.(mid|midi)$/i, "");
+          $("midiTitle").value = baseName || "MIDI 简谱";
+          $("midiBpm").value = parsed.bpm;
+          $("midiStartBar").value = 1;
+          $("midiEndBar").value = Math.min(parsed.totalMeasures, 36);
+          $("midiDropTitle").textContent = `已载入：${file.name}`;
+          $("midiDropHint").textContent = `共 ${parsed.tracks.length} 条旋律轨 · ${parsed.bpm} BPM · ${parsed.timeSig.num}/${parsed.timeSig.den} 拍 · 共 ${parsed.totalMeasures} 小节（点击可更换）`;
+          $("midiFileSummary").textContent = `${parsed.tracks.length} 条旋律轨`;
+
+          selectedTrackIndices = new Set();
+          const rec = parsed.tracks.find((t) => t.recommended) || parsed.tracks[0];
+          selectedTrackIndices.add(rec.index);
+
+          renderTrackList(parsed);
+          $("midiConfigWrap").classList.remove("hidden");
+          runMidiConvert();
+          showToast("MIDI 解析成功，已自动生成简谱");
+        } catch (err) {
+          showToast(err.message || "无法解析该 MIDI 文件");
+        }
+      }
+
+      const dropzone = $("midiDropzone");
+      const fileInput = $("midiFileInput");
+      dropzone.addEventListener("click", () => fileInput.click());
+      fileInput.addEventListener("change", (e) => {
+        if (e.target.files && e.target.files[0]) handleMidiFile(e.target.files[0]);
+      });
+      dropzone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropzone.classList.add("dragover");
+      });
+      dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+      dropzone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropzone.classList.remove("dragover");
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          handleMidiFile(e.dataTransfer.files[0]);
+        }
+      });
+
+      ["midiKey", "midiGrid", "midiChordMode", "midiOctave", "midiMinGap"].forEach((id) => {
+        $(id).addEventListener("change", runMidiConvert);
+      });
+      $("btnConvertMidi").addEventListener("click", () => {
+        runMidiConvert();
+        showToast("已按当前参数重新生成简谱");
+      });
+
+      // ==========================================
+      // 野生谱清洗逻辑
+      // ==========================================
+      $("btnSampleWild").addEventListener("click", () => {
+        $("wildTitle").value = "春江花月·片段";
+        $("wildBpm").value = 92;
+        $("wildInput").value =
+          "主歌：3 (35) (6+1) (+16) 5 (56) 5-\n副歌：② (35) (23) (1-6) -5 6- 1 2 (32) 1";
+        showToast("已填入野生数字谱示例");
+      });
+
+      $("btnSampleSky").addEventListener("click", () => {
+        $("wildTitle").value = "光遇风铃·片段";
+        $("wildBpm").value = 88;
+        $("wildInput").value =
+          "A S D G H Q W E\nQ H G D S A G B";
+        showToast("已填入光遇 21 键谱示例");
+      });
+
+      const DIALECT_LABELS = {
+        standard: "通用数字方言",
+        sky_genshin: "光遇 / 原神 21 键",
+        solfege: "唱名 DoReMi",
+        note_names: "科学音名 C4"
+      };
+
+      $("btnCleanWild").addEventListener("click", () => {
+        const raw = $("wildInput").value;
+        if (!raw.trim()) {
+          showToast("请先粘贴需要清洗的简谱或键谱");
+          return;
+        }
+        const res = E.cleanWildNotation(raw, {
+          title: $("wildTitle").value.trim() || "清洗简谱",
+          bpm: Number($("wildBpm").value) || 96,
+          dialect: $("wildDialect").value,
+          dashAsLowOctave: $("wildDashLow").checked ? true : "auto",
+          autoBarlines: $("wildAutoBar").checked,
+          instrument: instSelect.value
+        });
+        $("outputNotation").value = res.notation;
+        $("dialectBadge").textContent = `已识别：${DIALECT_LABELS[res.dialect] || res.dialect} · ${res.stats.convertedNotes} 音`;
+        refreshDiagnosis();
+        showToast(`清洗完成，共转换 ${res.stats.convertedNotes} 个音符`);
+      });
+
+      // ==========================================
+      // 十大民乐实时试听（复用 BeatForgeSynth + parseJianpuToChart）
+      // ==========================================
+      function stopPreview() {
+        previewTimers.forEach((t) => clearTimeout(t));
+        previewTimers = [];
+        isPlaying = false;
+        $("btnPlayPreview").disabled = false;
+        $("btnPlayPreview").textContent = "▶ 试听预览";
+        $("btnStopPreview").disabled = true;
+      }
+
+      $("btnPlayPreview").addEventListener("click", () => {
+        const text = $("outputNotation").value.trim();
+        if (!text) {
+          showToast("请先生成或输入简谱再试听");
+          return;
+        }
+        if (!Rhythm || !Synth) {
+          showToast("音色引擎未就绪，请检查脚本路径");
+          return;
+        }
+
+        stopPreview();
+        const chart = Rhythm.parseJianpuToChart(text);
+        if (!chart.notes || chart.notes.length === 0) {
+          showToast("未解析出可试听的音符");
+          return;
+        }
+
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!audioCtx) audioCtx = new AudioCtx();
+        if (audioCtx.state === "suspended") audioCtx.resume();
+
+        const inst = instSelect.value || chart.instrument || "guzheng";
+        const firstTime = chart.notes[0].time;
+        const lastNote = chart.notes[chart.notes.length - 1];
+        const totalMs = Math.max(800, (lastNote.time - firstTime + 1.0) * 1000);
+
+        isPlaying = true;
+        $("btnPlayPreview").disabled = true;
+        $("btnPlayPreview").textContent = "🔊 正在试听...";
+        $("btnStopPreview").disabled = false;
+
+        chart.notes.forEach((n) => {
+          const delayMs = Math.max(0, (n.time - firstTime) * 1000);
+          const tid = setTimeout(() => {
+            if (!isPlaying) return;
+            Synth.playNote(audioCtx, n.freq, {
+              instrument: inst,
+              duration: Math.max(0.32, n.durationSec || 0.45),
+              velocity: 0.85,
+              laneIndex: n.lane,
+              reverb: true
+            });
+          }, delayMs);
+          previewTimers.push(tid);
+        });
+
+        const endTid = setTimeout(() => {
+          stopPreview();
+        }, totalMs + 200);
+        previewTimers.push(endTid);
+      });
+
+      $("btnStopPreview").addEventListener("click", stopPreview);
+
+      // ==========================================
+      // 导出与直存小手机曲库
+      // ==========================================
+      $("btnCopy").addEventListener("click", async () => {
+        const text = $("outputNotation").value.trim();
+        if (!text) return showToast("当前没有可复制的简谱");
+        try {
+          await navigator.clipboard.writeText(text);
+          showToast("已复制标准简谱，可直接粘贴至小手机");
+        } catch (e) {
+          $("outputNotation").select();
+          document.execCommand("copy");
+          showToast("已复制标准简谱");
+        }
+      });
+
+      $("btnDownload").addEventListener("click", () => {
+        const text = $("outputNotation").value.trim();
+        if (!text) return showToast("当前没有可导出的简谱");
+        const m = text.match(/^@title\s+(.+)$/m);
+        const fname = (m ? m[1].trim() : "转换工坊简谱").replace(/[\\/:*?"<>|]/g, "_") + ".txt";
+        const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fname;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showToast(`已导出 ${fname}`);
+      });
+
+      $("btnSavePhone").addEventListener("click", () => {
+        const text = $("outputNotation").value.trim();
+        if (!text) return showToast("当前没有可存入的简谱");
+        const diag = E.diagnoseJianpu(text);
+        if (diag.noteCount === 0) return showToast("简谱中无有效音符，无法存入");
+        try {
+          const res = E.saveToPhoneLibrary({ notation: text, instrument: instSelect.value });
+          showToast(`已存入小手机曲库《${res.item.title}》（共 ${res.total} 首）`);
+        } catch (err) {
+          showToast("存入失败，请改用「复制简谱」或「导出 .txt」");
+        }
+      });
+    })();
+  </script>
+</body>
+
+</html>

@@ -995,13 +995,37 @@
             },
             h(
               "div",
-              { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
-              h("strong", { style: { fontSize: "15px" } }, "🎼 简谱曲库与导入（自动生成 7 轨谱面）"),
+              { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "6px" } },
+              h("strong", { style: { fontSize: "14.5px", flex: 1 } }, "🎼 简谱曲库与导入"),
+              h(
+                "button",
+                {
+                  type: "button",
+                  onClick: () => {
+                    if (global && typeof global.open === "function") {
+                      global.open("workshop.html", "_blank");
+                    }
+                  },
+                  title: "打开独立简谱转换工坊（MIDI转简谱 / 野生谱清洗）",
+                  style: {
+                    border: "1px solid #D9C398",
+                    background: "#FBF4E5",
+                    color: "#7B552C",
+                    borderRadius: "999px",
+                    padding: "4px 9px",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap"
+                  }
+                },
+                "🛠️ 转换工坊 ↗"
+              ),
               h(
                 "button",
                 {
                   onClick: () => setShowJianpuModal(false),
-                  style: { border: "none", background: "#EFE7D6", borderRadius: "999px", width: "26px", height: "26px", cursor: "pointer" }
+                  style: { border: "none", background: "#EFE7D6", borderRadius: "999px", width: "26px", height: "26px", cursor: "pointer", flexShrink: 0 }
                 },
                 "✕"
               )
