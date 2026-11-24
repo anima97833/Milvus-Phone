@@ -1,160 +1,86 @@
-# Zoom 视频通话 3.0：通话契机、AI 主动来电、拒接/回拨与群聊角色互邀拒出镜 实施策划案
+# 「主屏小组件 2.1」名士语录排版升级 & 多图平滑轮播相册技术策划案
 
-> **架构铁律**：严格遵循 **独立模块化引擎 + 轻量埋点接入**，严禁继续膨胀 `Milvus/app.min.js`。
-> 本次 3.0 升级将全部复杂逻辑（来电契机检测、振铃与防骚扰状态机、拒接/未接/回拨流转、群聊点名拉人与性格化拒绝出镜）封装进独立新模块 `Milvus/video_call_invite_engine.js` 与现有 `Milvus/video_call_engine.js`；`Milvus/app.min.js` 仅需 **2 处极简埋点（总计 < 18 行）**；数据持久化全部复用独立 IndexedDB `milvus_video_call_idb`（升级至 v3），**零写入 `localStorage`**。
-
----
-
-## 一、需求全景与体验设计
-
-### 1.1 发起视频通话的 4 类自然契机
-
-| 契机类型 | 发起方 | 触发场景 | 体验效果 |
-| :--- | :--- | :--- | :--- |
-| **契机 1：用户主动发起** | 用户 | 点击私聊/群聊工具栏摄像机图标；或在未接/拒接卡片上点「回拨」 | 进入真实感呼叫振铃态（可配置秒接或 2~3.5 秒振铃判定） |
-| **契机 2：传讯对话自然升温** | AI 名士 | 文字聊天中情绪升温、想当面展示某物、急事求助/撒娇/训话，或用户提到“想见你/开视频” | AI 回复中附带协议标签 `[[VIDEO_CALL_INVITE:来电理由]]`，前端自动剥离标签并弹出顶部来电横幅 / 振铃界面 |
-| **契机 3：鸿雁传书主动来电** | AI 名士（后台调度） | 复用 `Milvus/proactive_msg_engine.js` 的定时/沉默追问/混合触发与防骚扰风控 | 开启「允许偶发视频来电」后，按设定概率（默认 25%）由纯文字传讯升级为「名士主动视频来电」 |
-| **契机 4：群聊内部拉会/点名** | 某位群名士 / 用户 | 群聊中某角色提议“开个视频会”，或视频会议进行中用户/名士点名拉其他人入镜 | 弹出「XXX 发起了群视频会议」来电横幅；会中支持点名邀请未出镜角色，对方按人设决定露脸、仅语音或拒绝出镜 |
+> **架构铁律**：严格遵循 **独立模块化引擎 + 轻量埋点接入** 原则。
+> - `Milvus/app.min.js` **0 行新增改动**；
+> - 全部多图媒体数据继续存储在独立 IndexedDB（`milvus_home_widgets_idb` → `widget_media` 表），**零 `localStorage` 新增写入**；
+> - 全部操作图标维持 **手绘矢量 SVG（零 Emoji）**。
 
 ---
 
-### 1.2 接听、拒接、未接与回拨完整状态机（私聊 vs 群聊）
+## 一、 整体改动文件规划
 
-```mermaid
-stateDiagram-v2
-    [*] --> Idle
-    Idle --> IncomingRinging: AI 主动来电 (契机2/3/4)
-    Idle --> OutgoingRinging: 用户主动拨打 / 点击卡片回拨
-
-    IncomingRinging --> Connected: 用户点击「接听」
-    IncomingRinging --> DeclinedByUser: 用户点击「拒接」或「挂断并回复」
-    IncomingRinging --> Missed: 30 秒超时未接
-
-    OutgoingRinging --> Connected: 对方接通 (私聊接听 / 群聊至少1人入场)
-    OutgoingRinging --> DeclinedByAI: 私聊对方忙碌/闹脾气拒接
-    OutgoingRinging --> CanceledByUser: 用户主动取消呼叫
-
-    Connected --> Completed: 挂断结束 -> 生成通话纪要卡片
-    DeclinedByUser --> Idle: 写入「已拒绝」卡片 + 对方性格化反应
-    Missed --> Idle: 写入「未接视频」卡片 + 对方文字留言
-    DeclinedByAI --> Idle: 写入「对方已拒绝」卡片 + 拒绝理由(可一键回拨)
-    CanceledByUser --> Idle: 写入「已取消」卡片
-    Completed --> Idle
-```
-
-#### 私聊场景细节
-- **AI 主动打来**：
-  - 顶部弹出悬浮**来电横幅**（不强行打断当前阅读），点击可展开全屏来电界面；显示名士头像、来电理由（如 *“刚熬好药，想亲眼看你喝下去”*）、`接听` / `拒接` / `挂断并回一句话`（快捷项：“现在不方便”“在忙，晚点回你”“自定义输入”）。
-  - **接听**：直接打开 `VideoCallEngine.openCall`，将 `callContext`（来电理由、发起方式）注入首轮 Prompt，名士顺着来电理由自然开场。
-  - **拒接**：写入 `voice_call_record`（`callKind: "video"`, `status: "rejected_by_user"`）卡片到当页传讯；若用户附带了拒接理由或未附带理由，自动触发对方基于 6 项人设发来 1 条自然回应（例如体贴叮嘱、委屈追问或傲娇冷哼），进入正常上下文。
-  - **30 秒未接**：自动停止振铃，写入 `status: "missed"` 卡片 + 对方 1 条文字留言。
-- **用户主动打去 / 回拨**：
-  - 支持在视频设置中切换「拟真振铃模式（默认开）」与「秒接模式」。
-  - 拟真模式下：显示 1.8~3.5 秒呼叫中画面，轻量判定对方接听态度：
-    - **约 88% 正常接通**（附带接通瞬间小动作，如“刚放下笔”“擦着头发接起”）。
-    - **约 12%（仅在上下文明确在吵架/忙碌/生闷气等情境下触发）性格化拒接**：写入 `status: "rejected"` 卡片 + 1 条符合人设的拒接文字消息。
-    - **防挫败兜底**：用户在 5 分钟内点击「回拨」第 2 次时，**100% 强制接通**（对方软化/无奈接起），绝不死锁。
-
-#### 群聊场景细节：点名拉人与性格化拒绝出镜
-- **四态参会模型（`attendanceState`）**：群聊每位成员在会议中拥有独立状态，不再机械全员同时露脸：
-  1. `joined_camera`：**已入场 · 露脸出镜**（正常占据 2×2 分页画格，支持自定义出镜图与背景）。
-  2. `joined_audio_only`：**已入场 · 关镜头仅语音**（画格保留在分页中，头像微暗并标注 `📷 已关闭摄像头 · 仅语音`，附带角色理由标签，如“衣冠不整，只听诸君议事”；照常参与发言）。
-  3. `declined`：**已拒绝出镜 / 未参会**（不占用 2×2 活跃视频格，收纳至顶部 `👥 成员 (X/N)` 抽屉的「未出镜」列表，展示拒绝理由，如“军务繁忙，恕不奉陪”）。
-  4. `inviting`：**呼叫拉人中**（持续 1.5~2.5 秒脉冲动画，等待被邀者表态）。
-- **开场自动分流**：
-  - 群视频接通瞬间，引擎基于所有群成员的 **6 项完整配置（姓名/ID、MBTI、星座、语言风格、性格特点、个人背景）+ 用户身份配置库 + 开启的世界书 + 近期群聊上下文**，通过 **1 次批量结构化 LLM 请求**（超时 3.5 秒则降级到本地 MBTI 规则引擎）判定每位成员的初始参会状态与一句话理由。
-  - **保底机制**：无论怎么判定，始终保证至少 1~2 位成员处于 `joined_camera` 或 `joined_audio_only`，绝不出现空房冷场；同时在成员抽屉顶部提供「一键全员出镜」按钮，满足用户想直接看全员的需求。
-- **会中角色互邀（A 邀请 B，B 可同意或拒绝出镜）**：
-  - 点击顶部 `👥 成员` 按钮打开参会抽屉，针对任何 `declined`（未出镜）或 `joined_audio_only`（未开镜头）的角色，用户可以选择：
-    - **「我来邀请」**：以用户身份点名拉他入镜/开摄像头；
-    - **「让某位已入场名士去叫」**（下拉选择已入场的名士 A，如让杨修去叫陆逊，或让张仲景催孙策开镜头）。
-  - 引擎将「邀请人 A 的人设 + 被邀人 B 的 6 项人设 + 群聊上下文 + 当前会议对话」拼装后请求 LLM，生成两段互动：
-    1. 邀请人 A 的喊话（如 *“[杨修] 喂，伯言，别躲在屏风后面装忙了，殿下叫你露个脸。”*）；
-    2. 被邀人 B 的真实表态：`accept_camera`（妥协露脸，画格立刻亮起并可跳转至其所在分页）/ `accept_audio`（只肯开麦旁听）/ `reject`（继续高冷/害羞/嘴硬拒绝出镜并回怼邀请人）。
-  - 所有邀请与拒绝互动都会实时显示在实时字幕、会议聊天记录，并在挂断后同步归档进传讯卡片与主线上下文。
-
----
-
-## 二、模块化架构与文件改动清单
-
-### 2.1 新增独立模块：`Milvus/video_call_invite_engine.js`
-暴露全局接口 `window.VideoCallInviteEngine`，内部完全自包含：
-1. **IndexedDB 存储扩展（复用 `milvus_video_call_idb` v3）**：
-   - 新增 ObjectStore `call_invite_state`（按 `chatId` 记录 `lastInviteAt`、`dailyInviteCount`、`consecutiveCallAttempts`、`ringingMode`、`allowProactiveVideo`、`proactiveVideoChance`）。
-   - **零 `localStorage` 写入**（仅只读读取主 `api_configs` 与 `user_personas`）。
-2. **协议标签解析与防刷屏守门器**：
-   - `extractInviteTag(text)`：从 AI 文本中提取 `[[VIDEO_CALL_INVITE:理由]]` 或 `[[GROUP_VIDEO_INVITE:发起人|理由]]`，返回 `{ cleanText, invite }`。
-   - `canTriggerIncomingCall(chatId)`：检查互斥锁（当前是否已在视频通话/振铃中）、单会话 15 分钟冷却、免打扰时段（复用 `ProactiveMsgEngine` 免打扰配置）与每日主动来电上限（默认 3 次/天）。
-3. **全局来电振铃 Portal（`z-index: 99999`）**：
-   - **紧凑来电横幅**（页面顶部滑入，显示头像/群名、来电理由、接听/拒接/展开）。
-   - **全屏来电 / 呼叫振铃页**（接听、拒接、挂断并附快捷理由、30 秒倒计时、Web Audio 柔和铃声 + 移动端震动）。
-4. **AI 决策器**：
-   - `decidePrivateOutgoingOutcome(chatData, roleplayBundle, attemptCount)`：私聊主动拨打接听/拒接判定（第 2 次回拨强制接通）。
-   - `decideGroupInitialAttendance(chatData, members, roleplayBundle, initiator)`：单次批量判定群成员入场态（`joined_camera` / `joined_audio_only` / `declined` + 理由），附 3.5s 超时本地降级器。
-   - `requestMemberInviteTurn({ inviter, target, chatData, roleplayBundle, transcript })`：处理「角色 A 邀请角色 B 出镜」的双向对话与状态变更。
-5. **传讯卡片写入器**：
-   - 统一通过 `window.chatHistoryStore.appendMessage` 写入 `voice_call_record`（`callKind: "video"`, `status: "missed" | "rejected" | "rejected_by_user" | "canceled"`），并触发 `milvus-video-call-saved` 事件刷新当前传讯页。
-
-### 2.2 升级现有模块：`Milvus/video_call_engine.js`
-1. `openCall(...)` 新增可选参数 `callContext`（`{ triggerSource, inviteReason, initiatorName, initialMemberStates, isCallback }`）：
-   - 首轮开场字幕与 Prompt 自动衔接 `inviteReason` 与 `initiatorName`。
-2. 群聊画格支持三态渲染：
-   - `joined_camera`：正常显示头像/自定义出镜图 + 背景。
-   - `joined_audio_only`：画格灰化蒙层 + `📷 已关闭摄像头 · 仅语音` + 理由角标，仍可正常发言与绿框高亮。
-   - `declined`：自动过滤出 2×2 主画格，移入顶部 `👥 成员` 抽屉。
-3. 顶部栏新增 `👥 成员 (X/N)` 抽屉（仅群聊显示）：
-   - 列出「已出镜」「仅语音」「未出镜/已拒绝」三组名单与理由；
-   - 对未出镜/仅语音成员提供「📣 我来邀请」与「🗣️ 让 [选择已入场名士] 去叫」双模式拉人；
-   - 提供「✨ 一键全员出镜」覆盖开关；
-   - 底部设置区新增「拟真呼叫振铃」开关。
-
-### 2.3 轻量联动：`Milvus/proactive_msg_engine.js`（约 15 行）
-- 在 `DEFAULT_CHAT_CONFIG` 新增 `allowVideoCallInvite: false`、`videoCallChance: 25`（百分比）。
-- 在 `ProactiveMsgSettingsCard` 增加对应开关项。
-- 在 `triggerProactiveForChat` 生成内容前/后，若开启 `allowVideoCallInvite` 且命中概率且 `VideoCallInviteEngine.canTriggerIncomingCall(chatId)` 通过，则转为触发 `VideoCallInviteEngine.receiveIncomingCall(...)`。
-
-### 2.4 极简埋点：`Milvus/app.min.js`（严格 ≤ 18 行）
-1. **工具栏摄像机按钮**：优先走 `VideoCallInviteEngine.startOutgoingCall(...)`（降级回退 `VideoCallEngine.openCall(...)`），实现拟真呼叫振铃与群聊开场入场分流。
-2. **`voice_call_record` 卡片渲染处**（第 117628 行附近）：当 `msg.callKind === "video"` 且 `msg.status` 为 `missed` / `rejected` / `rejected_by_user` / `canceled` 时，右侧显示一个轻量 `回拨` 按钮，点击调用 `VideoCallInviteEngine.startOutgoingCall({ chatData, isGroup, isCallback: true, ... })`。
-3. **AI 文本回复监听点**（`ChatDetail` 收到新回复后）：调用 `VideoCallInviteEngine.inspectAiReplyForInvite(chatData, replyMsg)`，若命中 `[[VIDEO_CALL_INVITE:...]]` 则触发来电横幅。
-
-### 2.5 脚本挂载：`index.html`
-在 `video_call_engine.js` 之后、`app.min.js` 之前挂载：
-```html
-<script src="Milvus/video_call_whiteboard.js?v=1795700000000"></script>
-<script src="Milvus/video_call_engine.js?v=1795700000003"></script>
-<script src="Milvus/video_call_invite_engine.js?v=1795700000000"></script>
-<script src="Milvus/app.min.js?v=1795700000003"></script>
-```
-
----
-
-## 三、关键技术难点与潜在问题解决方案
-
-| 潜在问题 | 根因分析 | 技术解决方案 |
+| 文件路径 | 职责定位 | 改动方式 |
 | :--- | :--- | :--- |
-| **1. 浏览器拦截自动播放铃声** | 移动端 Safari/Chrome 的 Autoplay Policy 禁止未交互页面的音频播放 | 使用 Web Audio API 合成柔和双音振铃；仅在 `AudioContext.state === "running"` 或用户手势后发声，被拦截时静默降级为顶部脉冲横幅 + `navigator.vibrate([200, 120, 200])`，零报错 |
-| **2. AI 滥用标签导致疯狂来电骚扰** | 仅靠 Prompt 约束容易在连续几轮重复输出邀请标签 | 硬编码四重闸门：单会话 15 分钟冷却 + 每日上限 3 次 + 通话/振铃互斥锁 + 免打扰时段拦截；未通过闸门时只剥离标签保留自然文字，不弹振铃 |
-| **3. 群聊入场判定太慢导致呼叫卡顿** | 若逐个成员请求 LLM，6 人群需 6 次请求耗时 >15 秒 | 合并为 **单次轻量批量 JSON 请求**（`max_tokens: 260`），并设 **3.5 秒超时竞速**（`Promise.race`）；超时或 JSON 异常自动降级到本地 MBTI（I/E 倾向）+ 稳定保底策略，确保 3.5 秒内必进房间 |
-| **4. 群聊全员拒绝出镜导致冷场** | 多个高冷/内向人设同群时，LLM 可能全判拒绝 | 强制后处理保底：若 `joined_camera + joined_audio_only === 0`，自动将发起人或首位成员提升为 `joined_camera`；同时提供「一键全员出镜」手动覆盖开关 |
-| **5. 拒接/未接/拒绝出镜后上下文断层** | 通话外状态若不写回传讯记录，下轮聊天 AI 会失忆 | 拒接/未接/取消均写入 `voice_call_record` 卡片并附带 `declineReason` / `missedNote`；`app.min.js` 原有上下文组装逻辑会自动将 `voice_call_record` 摘要注入下一轮对话历史 |
-| **6. 正在通话时收到另一会话来电** | 鸿雁传书后台定时器可能在通话中触发其他名士来电 | `VideoCallInviteEngine` 维护全局 `_busyState` 锁；通话/白板/振铃中收到新来电自动转为「未接视频通话」卡片 + 顶部轻提示，绝不顶掉当前 Zoom 画面 |
+| `Milvus/app.min.js` | 主屏与设置中心入口 | **零改动**（0 行） |
+| `Milvus/home_widget_css.js` | 补充 `.hw-quote-body`、`.hw-quote-list`、`.hw-photo-track`、`.hw-photo-dots` 等语义类名至默认 CSS 模板，确保自定义 CSS / 5 套通用预设完美兼容 | 轻量增量 |
+| `Milvus/home_widget_ui.js` | ① 重构 `char_quote` 名士语录组件（`2×2` 智能正居中、`2×1` 长句无遮挡自动平滑滚动、多行与 `•` 项目符号黑点清单支持）；② 重构 `photo` 相册组件（多图上传存 IDB、缩略图管理、平滑横移 Slide / 淡入淡出 Fade 自动轮播 + 卡片内手势切图） | 核心升级 |
+| `index.html` | 刷新 `home_widget_css.js` 与 `home_widget_ui.js` 的 `?v=` 版本戳 | 仅更新版本号 |
 
 ---
 
-## 四、分阶段实施计划
+## 二、 升级模块 A：名士语录签（`char_quote`）精细排版方案
 
-### Phase 0：核心引擎与纯模块研发（零改动 `app.min.js` 与 `index.html`）
-1. 新建 `Milvus/video_call_invite_engine.js`：实现 IDB v3 `call_invite_state`、来电协议解析、防骚扰四重闸门、来电横幅与全屏振铃 Portal、Web Audio 柔和铃声、私聊接听/拒接/回拨判定、群聊单次批量入场分流与角色互邀决策器。
-2. 升级 `Milvus/video_call_engine.js`：接入 `callContext`、支持群聊三态画格渲染（露脸 / 仅语音 / 已拒绝）、新增顶部 `👥 成员` 抽屉（含「我来邀请」「让某名士去叫」「一键全员出镜」）与拟真振铃设置开关。
-3. 编写并运行 Node 自动化测试：验证标签解析、15 分钟冷却与互斥锁、第 2 次回拨强制接通、群聊全员拒接保底、批量入场超时降级、零 `localStorage.setItem` 写入、`node --check` 语法检查。
+### 1. 解决 3 大现存痛点
+| 痛点 | 根因 | 精准解决方案 |
+| :--- | :--- | :--- |
+| **`2×2` 四格时单句话沉底左偏，不能居中** | 外层 `.hw-surface` 默认 `justify-content: space-between`，文案区没有 `flex: 1` 独立居中容器 | 将正文区包裹在独立的 `.hw-quote-body`（`flex: 1; display: flex; align-items: center; justify-content: center;`）中：**单句/无黑点诗句**在 `2×2` 自动**水平 + 垂直正居中**，如诗签般雅致 |
+| **`2×1` 二格时长句被直接截断遮挡** | 之前写死了 `-webkit-line-clamp: 2; overflow: hidden;`，超出两行直接消失 | 在 `2×1`（及任意内容超出容器高度时）移除硬截断，改为 **双模式无遮挡阅读**：① 若文字超长自动启用**温和慢速纵向/横向平滑滚动**（或可触摸上下轻滑阅读完整句）；② 轻点语录正文可弹出极简「名士完整语录赏析」轻浮窗，一字不漏 |
+| **不支持换行与项目符号黑点（`•`）** | 设置页此前是单行 `<input type="text">` 且未解析行首符号 | 设置页升级为 **多行 `<textarea>`** + 工具栏一键插入 **`• ` 黑点** 按钮 + 对齐切换（`智能居中` / `左对齐`）；渲染层自动解析换行与行首 `- ` / `* ` / `• `，输出规范悬挂缩进的黑点清单（`.hw-quote-list` + `.hw-quote-bullet`） |
 
-### Phase 1：轻量埋点与全链路联调
-1. 在 `Milvus/proactive_msg_engine.js` 增加「允许偶发视频来电」配置项与触发桥接。
-2. 在 `Milvus/app.min.js` 落入 2~3 处极简埋点（< 18 行）：工具栏接入 `startOutgoingCall`、未接/拒接视频卡片新增「回拨」按钮、AI 回复文本触发 `inspectAiReplyForInvite`。
-3. 在 `index.html` 挂载 `video_call_invite_engine.js` 并更新脚本版本号。
-4. 执行全量语法校验与集成验收。
+### 2. 智能排版规则（开箱即美观）
+- **单行/短诗句（无换行且无 `•`）**：在 `2×2` 下自动 `text-align: center` + 垂直居中，字号适当放大至 `14px`、`line-height: 1.65`。
+- **多行 / 带黑点清单（含 `\n` 或行首 `•` / `- ` / `* `）**：渲染为每行独立 `flex` 条目（左侧 4.5px 实心圆点 + 右侧正文自动换行对齐，绝不出现第二行顶到黑点下面的丑陋错位），整体在卡片中垂直居中。
+- **`2×1` 紧凑格适配**：头部头像名栏压缩至单行 `20px` 高度，正文区占满剩余 `~46px` 空间；若正文字符数 `> 18` 或多行，自动开启平滑慢滚（`scroll` / 可选柔缓动画），完整呈现不遮挡。
 
 ---
 
-> 请审阅以上策划案。确认无误后请回复 **「开始实施 Phase 0」**，我将先完成独立引擎开发与全套自动化单元测试。
+## 三、 升级模块 B：自由相册小组件（`photo`）多图平滑轮播方案
+
+### 1. 数据模型（100% 向下兼容旧单图存档）
+- 新增 `config.mediaIds: string[]`（保存多张图片的 IndexedDB `mediaId` 数组，单相册上限 12 张，防止内存膨胀）；
+- 兼容读取：`const ids = Array.isArray(cfg.mediaIds) && cfg.mediaIds.length ? cfg.mediaIds : (cfg.mediaId ? [cfg.mediaId] : []);`，老用户之前上传的单张团子相框无缝保留、零丢失；
+- 新增可选配置：
+  - `config.intervalSec`: 自动轮播间隔（`0` = 仅手动切换，默认 `5` 秒，可选 `4s` / `6s` / `10s`）；
+  - `config.transition`: 切换动效（`"slide"` 平滑横移推拉（默认） / `"fade"` 柔焦淡入淡出）。
+
+### 2. 平滑移动切换引擎（零闪烁、不与主屏翻页打架）
+- **平滑横移轨道（Slide）**：
+  - 所有已加载图片横向排列在同一条 `flex` 轨道 `.hw-photo-track` 中，每张图宽 `100%`、`flex-shrink: 0`；
+  - 通过 `transform: translate3d(-${activeIdx * 100}%, 0, 0)` + `transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1)` 实现 GPU 硬件加速的丝滑移动切换，绝不白屏闪烁！
+- **多图手势防冲突**：
+  - 在相册卡片内左右轻滑（位移 `> 24px`）直接平滑切换上一张 / 下一张，且在 `onPointerDown` / `onPointerMove` 严格 `stopPropagation()`，避免误触发主屏幕左右翻页；
+  - 底部浮现极简微距指示点（`.hw-photo-dots`，当前页拉长为小胶囊白点，其余为半透明小圆点；仅 1 张图时自动隐藏）；
+  - 页面切到后台（`document.hidden`）自动暂停轮播定时器，省电防发热。
+
+### 3. 设置页「多图相册管理器」
+在「小组件」设置页选中某个自由相框后：
+- **「+ 批量上传照片（存 IndexedDB）」**：`<input type="file" accept="image/*" multiple />`，支持一次多选或继续追加，每张自动经 Canvas 温和压缩至长边 `≤ 960px` 后存入 `milvus_home_widgets_idb`；
+- **缩略图管理条**：横向展示已上传的所有照片缩略图，支持点击左右微调顺序、点右上小 `×` 删除单张（同步清理 IDB 对应媒体记录释放空间）；
+- **轮播控制胶囊**：`切换动效：平滑横移 / 柔焦淡入` + `轮播速度：手动 / 4秒 / 6秒 / 10秒`。
+
+---
+
+## 四、 潜在技术难题与针对性解决方案
+
+| 潜在问题 | 根因分析 | 解决方案 |
+| :--- | :--- | :--- |
+| **1. 多图相册同时加载 10 张大图导致主屏卡顿** | 一次性解码过多未压缩原图会占用手机内存 | 上传时统一压缩至 `≤960px`（每张 ~70KB），并在组件卸载时清理定时器；单相册限制上限 12 张 |
+| **2. 在相册卡片上左右滑切图，结果把整个主屏幕翻到了第 2 页** | 主屏外层 `page-r2` 监听了 `onPointerDown` / `onPointerUp` 做翻页 | 相册内层触摸/指针事件在 `pointerdown` / `pointerup` 严格 `stopPropagation()`，并独立计算卡片内水平滑动距离 |
+| **3. 5 套内置 CSS 预设里的 `.hw-surface *` 影响黑点或轮播圆点颜色** | 通用预设写了 `.hw-surface * { color: ... !important; }` | 黑点采用 `background-color: currentColor`（自动跟随每套预设的文字色，融为一体！），相册指示点显式设置高对比半透明白点与轻微投影，在任意深浅照片上都清晰精致 |
+| **4. `2×1` 语录自动滚动时用户想停下来看某一句** | 持续动画无法暂停阅读 | 触摸/悬停自动 `animation-play-state: paused`，且轻点语录即可弹出完整赏析卡片 |
+
+---
+
+## 五、 实施与验收计划（单阶段高效落地）
+
+由于本次全部聚焦在 `Milvus/home_widget_ui.js` 与 `Milvus/home_widget_css.js` 两个独立模块（`app.min.js` 零改动），可直接分为清晰的 **Phase 0（样式类名与排版升级）→ Phase 1（多图平滑相册与验收）** 或一步到位实施：
+
+1. **升级 `Milvus/home_widget_css.js`**：为 `char_quote` 与 `photo` 模板补充 `.hw-quote-body` / `.hw-quote-bullet` / `.hw-photo-track` / `.hw-photo-dots` 类名注释。
+2. **升级 `Milvus/home_widget_ui.js`**：
+   - 完成 `char_quote` 的 `2×2` 智能居中、`2×1` 长句防遮挡平滑滚动/点击赏析、多行 `<textarea>` + 一键插入 `•` 黑点与规范清单渲染；
+   - 完成 `photo` 的多图批量上传（存 IDB）、缩略图排序/删除、平滑横移 Slide / 柔焦 Fade 自动轮播与卡片内左右轻滑切图。
+3. **验收**：`node --check` 零报错 + 零 Emoji 校验 + 兼容旧单图 `mediaId` 断言测试通过。
+
+---
+
+> **请审阅**：如认可上述方案，回复 **「开始实施」** 即可立刻落地这两项升级！

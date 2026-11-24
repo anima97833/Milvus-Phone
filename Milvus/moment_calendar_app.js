@@ -627,6 +627,144 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
     return results;
   }
 
+  // ==========================================
+  // 跨角色一键复刻纯逻辑引擎（Phase 0：候选扫描/智能去重/防串名/白名单合并/习惯摘要）
+  // ==========================================
+  function findCrossCharMoodCandidates(allMoods, currentCharId, targetDateStr, charNameMap = {}) {
+    if (!Array.isArray(allMoods) || !targetDateStr) return [];
+    const curId = String(currentCharId || "");
+    const rawMatches = allMoods.filter((rec) => {
+      if (!rec || rec.date !== targetDateStr) return false;
+      if (curId && String(rec.charId || "") === curId) return false;
+      const u = rec.userEntry || rec.user;
+      if (!u || typeof u !== "object") return false;
+      return Boolean(u.moodId || (u.text && String(u.text).trim()));
+    });
+
+    // 同贴纸 + 同正文智能去重合并，保留最新 updatedAt
+    const dedupMap = new Map();
+    for (const rec of rawMatches) {
+      const u = rec.userEntry || rec.user;
+      const cid = String(rec.charId || "");
+      const cname = (charNameMap && charNameMap[cid]) || "其他空间";
+      const sticker = getStickerById(u.moodId || u.moodLabel);
+      const moodId = sticker ? sticker.id : String(u.moodId || "");
+      const moodLabel = sticker ? sticker.label : String(u.moodLabel || "");
+      const normText = String(u.text || "").trim();
+      const key = `${moodId}::${normText}`;
+      const ts = Number(u.updatedAt || rec.updatedAt || 0);
+
+      if (!dedupMap.has(key)) {
+        dedupMap.set(key, {
+          key,
+          moodId,
+          moodLabel,
+          text: normText,
+          updatedAt: ts,
+          primaryCharId: cid,
+          primaryCharName: cname,
+          sourceCharIds: cid ? [cid] : [],
+          sourceCharNames: [cname]
+        });
+      } else {
+        const existing = dedupMap.get(key);
+        if (cid && !existing.sourceCharIds.includes(cid)) existing.sourceCharIds.push(cid);
+        if (!existing.sourceCharNames.includes(cname)) existing.sourceCharNames.push(cname);
+        if (ts > existing.updatedAt) {
+          existing.updatedAt = ts;
+          existing.primaryCharId = cid;
+          existing.primaryCharName = cname;
+        }
+      }
+    }
+
+    return Array.from(dedupMap.values()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  }
+
+  function detectSourceCharMention(text, sourceCharNames = []) {
+    const body = String(text || "").trim();
+    if (!body || !Array.isArray(sourceCharNames) || sourceCharNames.length === 0) return [];
+    const ignoreNames = new Set(["其他空间", "名士", "角色", "TA", "我"]);
+    const hits = [];
+    for (const rawName of sourceCharNames) {
+      const name = String(rawName || "").trim();
+      if (!name || name.length < 2 || ignoreNames.has(name)) continue;
+      if (body.includes(name) && !hits.includes(name)) {
+        hits.push(name);
+      }
+    }
+    return hits;
+  }
+
+  function buildClonedMoodRecord(existingRec, currentCharId, dateStr, sourceUser, sourceMeta = {}) {
+    const cid = String(currentCharId || "");
+    const sticker = getStickerById(sourceUser?.moodId || sourceUser?.moodLabel);
+    const now = Number(sourceMeta.now) || Date.now();
+    const base = existingRec && typeof existingRec === "object" ? { ...existingRec } : {};
+    const clonedEntry = {
+      moodId: sticker ? sticker.id : String(sourceUser?.moodId || "calm"),
+      moodLabel: sticker ? sticker.label : String(sourceUser?.moodLabel || "平静"),
+      text: String(sourceUser?.text || "").trim(),
+      clonedFromCharId: String(sourceMeta.primaryCharId || ""),
+      clonedFromCharName: String(sourceMeta.primaryCharName || (Array.isArray(sourceMeta.sourceCharNames) ? sourceMeta.sourceCharNames.join("、") : "")),
+      clonedAt: now,
+      updatedAt: now
+    };
+    return {
+      ...base,
+      id: `${cid}_${dateStr}`,
+      charId: cid,
+      date: dateStr,
+      // 严格白名单拷贝 userEntry 槽，100% 保留原有 charEntry 槽不受污染
+      userEntry: clonedEntry,
+      updatedAt: now
+    };
+  }
+
+  function buildDailyHabitSummary(userHabitDefs = [], logsByHabitId = {}, dateStr = "") {
+    if (!Array.isArray(userHabitDefs) || !dateStr) {
+      return { hasAny: false, periodText: "", completedHabits: [], summaryText: "" };
+    }
+    let periodText = "";
+    const completedHabits = [];
+    const flowLabelMap = { light: "偏少", medium: "适中", heavy: "偏多" };
+
+    for (const def of userHabitDefs) {
+      if (!def || !def.id) continue;
+      const list = logsByHabitId[def.id];
+      const log = Array.isArray(list)
+        ? list.find((l) => l && l.date === dateStr)
+        : list && list[dateStr]
+        ? list[dateStr]
+        : null;
+      if (!log) continue;
+
+      if (def.type === "period" || def.id === PERIOD_HABIT_ID) {
+        if (log.isPeriod) {
+          const parts = [];
+          if (log.flow && flowLabelMap[log.flow]) parts.push(`流量${flowLabelMap[log.flow]}`);
+          if (Array.isArray(log.symptoms) && log.symptoms.length > 0) parts.push(log.symptoms.join("、"));
+          if (log.note && String(log.note).trim()) parts.push(String(log.note).trim());
+          periodText = parts.length > 0 ? `经期中（${parts.join("，")}）` : "经期中";
+        }
+      } else if (log.done || log.status === "done" || log.checked) {
+        const note = log.note && String(log.note).trim() ? `（${String(log.note).trim()}）` : "";
+        completedHabits.push(`${def.name || "习惯"}${note}`);
+      }
+    }
+
+    const segments = [];
+    if (periodText) segments.push(periodText);
+    if (completedHabits.length > 0) segments.push(`已完成习惯打卡：${completedHabits.join("、")}`);
+    const summaryText = segments.join("；");
+    return {
+      hasAny: segments.length > 0,
+      periodText,
+      completedHabits,
+      summaryText
+    };
+  }
+
   // 独立圆圈贴纸槽（仿参考图：日期下两个纵向圆圈）
   function renderStickerCircle(entry, size = 34) {
     const h = React.createElement;
@@ -1122,6 +1260,53 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
     const [isExportingImg, setIsExportingImg] = useState(false);
     const [bannerDismissed, setBannerDismissed] = useState(false);
     const [hasTodayHabitLogged, setHasTodayHabitLogged] = useState(true);
+    // 跨角色一键复刻状态
+    const [allMoodsCache, setAllMoodsCache] = useState([]);
+    const [charNameMap, setCharNameMap] = useState({});
+    const [userHabitDefsCache, setUserHabitDefsCache] = useState([]);
+    const [userHabitLogsCache, setUserHabitLogsCache] = useState({});
+    const [showClonePicker, setShowClonePicker] = useState(false);
+    const [cloneMentionWarning, setCloneMentionWarning] = useState([]);
+    const [syncToast, setSyncToast] = useState("");
+
+    const flashSyncToast = (msg) => {
+      setSyncToast(msg);
+      setTimeout(() => setSyncToast(""), 1800);
+    };
+
+    const loadCrossCharCache = async () => {
+      try {
+        if (global.momentCalendarStore && typeof global.momentCalendarStore.getMoodsByChar === "function") {
+          const all = await global.momentCalendarStore.getMoodsByChar("");
+          setAllMoodsCache(Array.isArray(all) ? all : []);
+        }
+        let list = [];
+        if (global.chatCharacterStore && typeof global.chatCharacterStore.getAll === "function") {
+          list = await global.chatCharacterStore.getAll();
+        } else {
+          list = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        }
+        const cmap = {};
+        (list || []).forEach((c) => {
+          if (c && c.id) cmap[String(c.id)] = c.name || c.profile?.name || "名士";
+        });
+        setCharNameMap(cmap);
+
+        if (global.momentCalendarStore) {
+          const uDefs = (await global.momentCalendarStore.getHabitDefsByScope("user")) || [];
+          setUserHabitDefsCache(uDefs);
+          const logsObj = {};
+          let loggedToday = false;
+          for (const d of uDefs) {
+            const logs = (await global.momentCalendarStore.getHabitLogsByHabit(d.id)) || [];
+            logsObj[d.id] = logs;
+            if (logs.some((l) => l.date === todayStr)) loggedToday = true;
+          }
+          setUserHabitLogsCache(logsObj);
+          setHasTodayHabitLogged(loggedToday);
+        }
+      } catch (e) {}
+    };
 
     const charId = String(taCharacter?.id || "");
     const charName = taCharacter?.name || taCharacter?.profile?.name || "名士";
@@ -1204,23 +1389,7 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
       setErrorMsg("");
       loadMoods();
       loadHabitDefs(habitOwnerTab);
-      // 检查今天用户是否有任意习惯已打卡（用于全屏横幅提醒）
-      (async () => {
-        try {
-          if (global.momentCalendarStore) {
-            const userDefs = await global.momentCalendarStore.getHabitDefsByScope("user");
-            let logged = false;
-            for (const d of userDefs || []) {
-              const logs = await global.momentCalendarStore.getHabitLogsByHabit(d.id);
-              if ((logs || []).some((l) => l.date === todayStr)) {
-                logged = true;
-                break;
-              }
-            }
-            setHasTodayHabitLogged(logged);
-          }
-        } catch (e) {}
-      })();
+      loadCrossCharCache();
     }, [isOpen, charId]);
 
     useEffect(() => {
@@ -1245,19 +1414,96 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
       () => (activeHabit?.type === "period" ? computePeriodStats(habitLogsMap, todayStr) : null),
       [activeHabit, habitLogsMap, todayStr]
     );
+    const todayCloneCandidates = useMemo(
+      () => findCrossCharMoodCandidates(allMoodsCache, charId, todayStr, charNameMap),
+      [allMoodsCache, charId, todayStr, charNameMap]
+    );
+    const selectedCloneCandidates = useMemo(
+      () => (selectedDate ? findCrossCharMoodCandidates(allMoodsCache, charId, selectedDate, charNameMap) : []),
+      [allMoodsCache, charId, selectedDate, charNameMap]
+    );
+    const selectedHabitSummary = useMemo(
+      () => (selectedDate ? buildDailyHabitSummary(userHabitDefsCache, userHabitLogsCache, selectedDate) : { hasAny: false, summaryText: "" }),
+      [userHabitDefsCache, userHabitLogsCache, selectedDate]
+    );
 
     if (!isOpen) return null;
 
     const todayRecord = moodMap[todayStr];
     const hasTodayUserEntry = !!(todayRecord && todayRecord.userEntry && todayRecord.userEntry.moodId);
 
-    const openDateSheet = (dateStr) => {
+    const openDateSheet = (dateStr, autoOpenClone = false) => {
       const rec = moodMap[dateStr];
       setSelectedDate(dateStr);
       setDraftMoodId(rec?.userEntry?.moodId || "happy");
       setDraftText(rec?.userEntry?.text || "");
       setSaveNotice(false);
       setErrorMsg("");
+      setShowClonePicker(Boolean(autoOpenClone));
+      setCloneMentionWarning([]);
+    };
+
+    const applyCloneCandidate = async (cand, targetDate, directSave = false) => {
+      if (!cand || !targetDate) return;
+      const hits = detectSourceCharMention(cand.text, cand.sourceCharNames);
+      const existing = moodMap[targetDate];
+      const hasExistingText = Boolean(existing?.userEntry?.text && String(existing.userEntry.text).trim());
+
+      // 若命中防串名预警或已有原稿，优先填入编辑框让用户微调，避免误覆盖/串名乌龙
+      if (!directSave || hits.length > 0 || hasExistingText) {
+        setSelectedDate(targetDate);
+        setDraftMoodId(cand.moodId || "happy");
+        setDraftText(cand.text || "");
+        setCloneMentionWarning(hits);
+        setShowClonePicker(false);
+        return;
+      }
+
+      const merged = buildClonedMoodRecord(existing, charId, targetDate, cand, cand);
+      try {
+        if (global.momentCalendarStore && typeof global.momentCalendarStore.saveMood === "function") {
+          await global.momentCalendarStore.saveMood(merged);
+        }
+        setMoodMap((prev) => ({ ...prev, [targetDate]: merged }));
+        setAllMoodsCache((prev) => [merged, ...prev.filter((r) => r.id !== merged.id)]);
+        setDraftMoodId(merged.userEntry.moodId);
+        setDraftText(merged.userEntry.text);
+        setShowClonePicker(false);
+        setCloneMentionWarning([]);
+        setSaveNotice(true);
+        setTimeout(() => setSaveNotice(false), 1800);
+        flashSyncToast(`✓ 已复刻自 ${cand.primaryCharName}`);
+      } catch (e) {
+        setErrorMsg("复刻失败：" + (e?.message || e));
+      }
+    };
+
+    const handleQuickCloneToday = () => {
+      if (todayCloneCandidates.length === 0) return;
+      if (todayCloneCandidates.length === 1) {
+        const only = todayCloneCandidates[0];
+        const hits = detectSourceCharMention(only.text, only.sourceCharNames);
+        if (hits.length > 0) {
+          openDateSheet(todayStr, false);
+          setDraftMoodId(only.moodId || "happy");
+          setDraftText(only.text || "");
+          setCloneMentionWarning(hits);
+          return;
+        }
+        applyCloneCandidate(only, todayStr, true);
+      } else {
+        openDateSheet(todayStr, true);
+      }
+    };
+
+    const handleInsertHabitSummary = () => {
+      if (!selectedHabitSummary || !selectedHabitSummary.hasAny) return;
+      setDraftText((prev) => {
+        const base = String(prev || "").trim();
+        if (!base) return selectedHabitSummary.summaryText;
+        if (base.includes(selectedHabitSummary.summaryText)) return base;
+        return `${base}\n${selectedHabitSummary.summaryText}`;
+      });
     };
 
     const handleShiftMonth = (delta) => {
@@ -1300,6 +1546,8 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
           await global.momentCalendarStore.saveMood(updated);
         }
         setMoodMap((prev) => ({ ...prev, [selectedDate]: updated }));
+        setAllMoodsCache((prev) => [updated, ...prev.filter((r) => r.id !== updated.id)]);
+        setCloneMentionWarning([]);
         setSaveNotice(true);
         setTimeout(() => setSaveNotice(false), 1800);
       } catch (e) {
@@ -1548,7 +1796,47 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
           ),
           h(
             "div",
-            { style: { display: "flex", alignItems: "center", gap: "8px" } },
+            { style: { display: "flex", alignItems: "center", gap: "6px" } },
+            !hasTodayUserEntry &&
+              todayCloneCandidates.length > 0 &&
+              (() => {
+                const firstSt = getStickerById(todayCloneCandidates[0].moodId);
+                return h(
+                  "button",
+                  {
+                    type: "button",
+                    onClick: handleQuickCloneToday,
+                    title: `一键复刻今日在「${todayCloneCandidates[0].primaryCharName}」${todayCloneCandidates.length > 1 ? `等 ${todayCloneCandidates.length} 处` : ""}记录的心情`,
+                    style: {
+                      border: "1px solid #E2B46D",
+                      background: "#FFF8EB",
+                      color: "#9A5B13",
+                      borderRadius: "999px",
+                      padding: "2px 7px",
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      boxShadow: "0 1px 4px rgba(217,155,67,0.16)"
+                    }
+                  },
+                  firstSt &&
+                    h("img", {
+                      src: firstSt.img,
+                      alt: firstSt.label,
+                      style: { width: "16px", height: "16px", objectFit: "contain", display: "block" }
+                    }),
+                  h("span", null, todayCloneCandidates.length > 1 ? `⧉ ${todayCloneCandidates.length}` : "⧉")
+                );
+              })(),
+            syncToast &&
+              h(
+                "span",
+                { style: { fontSize: "10.5px", color: "#5E8C61", fontWeight: 600 } },
+                syncToast
+              ),
             h(
               "span",
               { style: { fontSize: "11px", color: "#9CA3AF" } },
@@ -2077,20 +2365,45 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
           ),
           habitOwnerTab === "user"
             ? h(
-                "button",
-                {
-                  onClick: () => setShowAddHabitForm((v) => !v),
-                  style: {
-                    border: "1px solid #E5E0D8",
-                    background: "#FFFFFF",
-                    color: "#44403C",
-                    fontSize: "11.5px",
-                    borderRadius: "999px",
-                    padding: "4px 10px",
-                    cursor: "pointer"
-                  }
-                },
-                showAddHabitForm ? "取消" : "+ 新增习惯"
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: "6px" } },
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    onClick: () => flashSyncToast("🔗 已跨角色共享"),
+                    title: "我的习惯与经期记录已自动跨角色同步，切换角色无需重复打卡",
+                    style: {
+                      border: "1px solid #D7E5D8",
+                      background: "#F3F9F4",
+                      color: "#4C7A50",
+                      fontSize: "11.5px",
+                      borderRadius: "999px",
+                      padding: syncToast ? "3px 8px" : "3px 7px",
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "3px"
+                    }
+                  },
+                  syncToast || "🔗"
+                ),
+                h(
+                  "button",
+                  {
+                    onClick: () => setShowAddHabitForm((v) => !v),
+                    style: {
+                      border: "1px solid #E5E0D8",
+                      background: "#FFFFFF",
+                      color: "#44403C",
+                      fontSize: "11.5px",
+                      borderRadius: "999px",
+                      padding: "4px 10px",
+                      cursor: "pointer"
+                    }
+                  },
+                  showAddHabitForm ? "✕" : "+"
+                )
               )
             : h(
                 "button",
@@ -3065,9 +3378,176 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
             },
             h(
               "div",
-              { style: { fontSize: "12.5px", fontWeight: 700, color: "#44403C", marginBottom: "10px" } },
-              "我的心情"
+              { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px", gap: "8px" } },
+              h(
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: "6px" } },
+                h("span", { style: { fontSize: "12.5px", fontWeight: 700, color: "#44403C" } }, "我的心情"),
+                selectedRecord?.userEntry?.clonedFromCharName &&
+                  h(
+                    "span",
+                    {
+                      title: `复刻自 ${selectedRecord.userEntry.clonedFromCharName}`,
+                      style: { fontSize: "10.5px", color: "#9A5B13", background: "#FFF8EB", border: "1px solid #F1DFBE", borderRadius: "999px", padding: "1px 6px" }
+                    },
+                    `⧉ ${selectedRecord.userEntry.clonedFromCharName}`
+                  )
+              ),
+              h(
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: "6px" } },
+                selectedHabitSummary.hasAny &&
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      onClick: handleInsertHabitSummary,
+                      title: `引入当日习惯/经期打卡摘要：${selectedHabitSummary.summaryText}`,
+                      style: {
+                        border: "1px solid #D7E5D8",
+                        background: "#F3F9F4",
+                        color: "#4C7A50",
+                        borderRadius: "999px",
+                        padding: "2px 8px",
+                        fontSize: "11.5px",
+                        cursor: "pointer"
+                      }
+                    },
+                    "📌"
+                  ),
+                selectedCloneCandidates.length > 0 &&
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      onClick: () => setShowClonePicker((v) => !v),
+                      title: `复刻当日在其他角色处写过的心情（共 ${selectedCloneCandidates.length} 条）`,
+                      style: {
+                        border: showClonePicker ? "1px solid #D99B43" : "1px solid #E2B46D",
+                        background: showClonePicker ? "#FDECC8" : "#FFF8EB",
+                        color: "#9A5B13",
+                        borderRadius: "999px",
+                        padding: "2px 8px",
+                        fontSize: "11.5px",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "3px"
+                      }
+                    },
+                    selectedCloneCandidates.length > 1 ? `⧉ ${selectedCloneCandidates.length}` : "⧉"
+                  )
+              )
             ),
+            // 跨角色复刻选择条（简洁图标化）
+            showClonePicker &&
+              selectedCloneCandidates.length > 0 &&
+              h(
+                "div",
+                {
+                  style: {
+                    marginBottom: "10px",
+                    padding: "8px",
+                    borderRadius: "12px",
+                    background: "#FFFBF2",
+                    border: "1px solid #F1DFBE",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px"
+                  }
+                },
+                selectedCloneCandidates.map((cand) => {
+                  const st = getStickerById(cand.moodId);
+                  return h(
+                    "div",
+                    {
+                      key: cand.key,
+                      style: {
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "8px",
+                        background: "#FFFFFF",
+                        border: "1px solid #EFECE6",
+                        borderRadius: "10px",
+                        padding: "6px 8px"
+                      }
+                    },
+                    h(
+                      "div",
+                      { style: { display: "flex", alignItems: "center", gap: "7px", minWidth: 0, flex: 1 } },
+                      st && h("img", { src: st.img, alt: st.label, style: { width: "22px", height: "22px", objectFit: "contain", flexShrink: 0 } }),
+                      h(
+                        "div",
+                        { style: { minWidth: 0, flex: 1 } },
+                        h(
+                          "div",
+                          { style: { fontSize: "11px", fontWeight: 700, color: "#78716C", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } },
+                          cand.sourceCharNames.join(" · ")
+                        ),
+                        h(
+                          "div",
+                          { style: { fontSize: "11.5px", color: "#292524", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } },
+                          cand.text || st?.label || "仅贴纸"
+                        )
+                      )
+                    ),
+                    h(
+                      "div",
+                      { style: { display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 } },
+                      h(
+                        "button",
+                        {
+                          type: "button",
+                          title: "填入草稿框微调",
+                          onClick: () => applyCloneCandidate(cand, selectedDate, false),
+                          style: { border: "1px solid #E5E0D8", background: "#FFFFFF", color: "#57534E", borderRadius: "8px", width: "26px", height: "26px", fontSize: "12px", cursor: "pointer", padding: 0 }
+                        },
+                        "✎"
+                      ),
+                      h(
+                        "button",
+                        {
+                          type: "button",
+                          title: "一键直接复刻保存",
+                          onClick: () => applyCloneCandidate(cand, selectedDate, true),
+                          style: { border: "none", background: "#D99B43", color: "#FFFFFF", borderRadius: "8px", width: "26px", height: "26px", fontSize: "12px", cursor: "pointer", padding: 0 }
+                        },
+                        "⚡"
+                      )
+                    )
+                  );
+                })
+              ),
+            cloneMentionWarning.length > 0 &&
+              h(
+                "div",
+                {
+                  style: {
+                    marginBottom: "8px",
+                    padding: "5px 9px",
+                    borderRadius: "8px",
+                    background: "#FEF3C7",
+                    border: "1px solid #FDE68A",
+                    color: "#92400E",
+                    fontSize: "11.5px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between"
+                  }
+                },
+                h("span", null, `⚠️ 原文含「${cloneMentionWarning.join("、")}」`),
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    onClick: () => setCloneMentionWarning([]),
+                    style: { border: "none", background: "transparent", color: "#92400E", cursor: "pointer", fontSize: "11px" }
+                  },
+                  "✕"
+                )
+              ),
             h(
               "div",
               {
@@ -3673,5 +4153,16 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
     );
   };
 
+  const MomentCalendarCloneHelpers = {
+    findCrossCharMoodCandidates,
+    detectSourceCharMention,
+    buildClonedMoodRecord,
+    buildDailyHabitSummary
+  };
+
   global.MomentCalendarModal = MomentCalendarModal;
+  global.MomentCalendarCloneHelpers = MomentCalendarCloneHelpers;
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = MomentCalendarCloneHelpers;
+  }
 })(typeof window !== "undefined" ? window : globalThis);

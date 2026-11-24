@@ -282,14 +282,36 @@
     KeyK: { code: 'KeyK', key: 'k', keyCode: 75 },
   };
 
-  function dispatchRuffleKey(eventType, spec) {
+  function focusRufflePlayer() {
+    const player = document.querySelector('ruffle-player');
+    if (!player) return null;
+    try {
+      const canvas = player.shadowRoot && player.shadowRoot.querySelector('canvas');
+      if (canvas) {
+        if (!canvas.hasAttribute('tabindex')) canvas.setAttribute('tabindex', '0');
+        if (document.activeElement !== player && player.shadowRoot.activeElement !== canvas) {
+          canvas.focus({ preventScroll: true });
+        }
+        return canvas;
+      }
+      if (document.activeElement !== player) {
+        player.focus({ preventScroll: true });
+      }
+      return player;
+    } catch {
+      return player;
+    }
+  }
+
+  function createKeyEvent(eventType, spec, repeat = false) {
     const { code, key, keyCode } = spec;
     const eventInit = {
       code,
       key,
+      repeat: Boolean(repeat),
       bubbles: true,
       cancelable: true,
-      composed: true, // 核心：允许穿透 Shadow DOM 边界
+      composed: true, // 允许沿 Shadow DOM 自然冒泡至 container -> ruffle-player -> document -> window
     };
 
     let evt;
@@ -306,32 +328,30 @@
       evt = new KeyboardEvent(eventType, eventInit);
       evt.__fromArcadeBridge = true;
     }
+    return evt;
+  }
 
-    // 1. 直达 RufflePlayer 宿主元素及其内部 ShadowRoot (Canvas + Container)
+  /**
+   * 精准单点派发：只向 Ruffle 内部最深层真实目标（canvas 或 player）派发一次全新事件，
+   * 利用 bubbles+composed 自然冒泡，彻底消除旧版 5 倍重复回声风暴与吞键问题。
+   */
+  function dispatchRuffleKey(eventType, spec, repeat = false) {
     const players = document.querySelectorAll('ruffle-player');
-    players.forEach((p) => {
-      try {
-        p.dispatchEvent(evt);
-        const shadow = p.shadowRoot;
-        if (shadow) {
-          const canvas = shadow.querySelector('canvas');
-          if (canvas) {
-            canvas.dispatchEvent(evt);
-          }
-          const container = shadow.getElementById('container');
-          if (container) {
-            container.dispatchEvent(evt);
-          }
+    if (players.length > 0) {
+      players.forEach((p) => {
+        try {
+          const shadow = p.shadowRoot;
+          const target = (shadow && (shadow.querySelector('canvas') || shadow.getElementById('container'))) || p;
+          target.dispatchEvent(createKeyEvent(eventType, spec, repeat));
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
-      }
-    });
+      });
+      return;
+    }
 
-    // 2. 向 window 与 document 派发
     try {
-      window.dispatchEvent(evt);
-      document.dispatchEvent(evt);
+      window.dispatchEvent(createKeyEvent(eventType, spec, repeat));
     } catch {
       // ignore
     }
@@ -837,10 +857,24 @@
     const [isMuted, setIsMuted] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [showLibraryModal, setShowLibraryModal] = useState(false);
-    const [pressedKey, setPressedKey] = useState(null);
+    const [pressedMap, setPressedMap] = useState({});
+    // 键位模式：'standard' 通用动作/RPG（A/B 不污染方向键），'miner' 黄金矿工兼容（A 附带下键，B 附带上键）
+    const [controlPreset, setControlPreset] = useState('standard');
+    // 方向键映射：'both' 方向键+WASD | 'arrows' 仅方向键 | 'wasd' 仅WASD（防双人同屏串控/双倍移速）
+    const [dpadMode, setDpadMode] = useState('both');
 
     const containerRef = useRef(null);
     const screenRef = useRef(null);
+    const dpadRef = useRef(null);
+    const activePointerActionsRef = useRef(new Map()); // pointerId -> Set<action>
+    const actionHoldCountRef = useRef(new Map());      // action -> count
+    const keyHoldCountRef = useRef(new Map());         // keyCodeName -> count
+    const repeatTimersRef = useRef(new Map());         // keyCodeName -> { delayTimer, intervalTimer }
+    const controlPresetRef = useRef(controlPreset);
+    const dpadModeRef = useRef(dpadMode);
+
+    useEffect(() => { controlPresetRef.current = controlPreset; }, [controlPreset]);
+    useEffect(() => { dpadModeRef.current = dpadMode; }, [dpadMode]);
 
     // 1. 初始化读取卡带库
     useEffect(() => {
@@ -858,112 +892,224 @@
       };
     }, []);
 
-    // 2. 虚拟按键动作触发器
-    const handleButtonDown = (action) => {
-      setPressedKey(action);
+    // 将虚拟按钮动作映射为物理按键列表
+    const resolveActionSpecs = (action) => {
+      const dm = dpadModeRef.current;
+      const preset = controlPresetRef.current;
+      const dirKeys = (arrowKey, wasdKey) => {
+        if (dm === 'arrows') return [KEY_SPECS[arrowKey]];
+        if (dm === 'wasd') return [KEY_SPECS[wasdKey]];
+        return [KEY_SPECS[arrowKey], KEY_SPECS[wasdKey]];
+      };
+      switch (action) {
+        case 'UP':
+          return dirKeys('ArrowUp', 'KeyW');
+        case 'DOWN':
+          return dirKeys('ArrowDown', 'KeyS');
+        case 'LEFT':
+          return dirKeys('ArrowLeft', 'KeyA');
+        case 'RIGHT':
+          return dirKeys('ArrowRight', 'KeyD');
+        case 'A':
+          return preset === 'miner'
+            ? [KEY_SPECS.Space, KEY_SPECS.ArrowDown, KEY_SPECS.KeyZ, KEY_SPECS.KeyJ]
+            : [KEY_SPECS.KeyZ, KEY_SPECS.KeyJ, KEY_SPECS.Space];
+        case 'B':
+          return preset === 'miner'
+            ? [KEY_SPECS.ArrowUp, KEY_SPECS.KeyX, KEY_SPECS.KeyK]
+            : [KEY_SPECS.KeyX, KEY_SPECS.KeyK];
+        case 'SPACE':
+          return preset === 'miner'
+            ? [KEY_SPECS.Space, KEY_SPECS.ArrowDown]
+            : [KEY_SPECS.Space];
+        case 'START':
+          return [KEY_SPECS.Enter];
+        case 'SELECT':
+          return [KEY_SPECS.ShiftLeft];
+        default:
+          return [];
+      }
+    };
 
-      // 自动让 Ruffle Player 获取焦点
-      const player = document.querySelector('ruffle-player');
-      if (player) {
-        try {
-          player.focus();
-          const canvas = player.shadowRoot && player.shadowRoot.querySelector('canvas');
-          if (canvas) canvas.focus();
-        } catch {
-          // ignore
+    const stopKeyRepeat = (code) => {
+      const timers = repeatTimersRef.current.get(code);
+      if (timers) {
+        if (timers.delayTimer) clearTimeout(timers.delayTimer);
+        if (timers.intervalTimer) clearInterval(timers.intervalTimer);
+        repeatTimersRef.current.delete(code);
+      }
+    };
+
+    const pressPhysicalSpec = (spec, enableRepeat = false) => {
+      if (!spec) return;
+      const prev = keyHoldCountRef.current.get(spec.code) || 0;
+      keyHoldCountRef.current.set(spec.code, prev + 1);
+      if (prev === 0) {
+        dispatchRuffleKey('keydown', spec, false);
+        // 兼容依赖 onKeyDown 连续事件驱动移动的老 Flash 游戏，按标准键盘节拍补发 repeat:true
+        if (enableRepeat) {
+          stopKeyRepeat(spec.code);
+          const delayTimer = setTimeout(() => {
+            if ((keyHoldCountRef.current.get(spec.code) || 0) <= 0) return;
+            const intervalTimer = setInterval(() => {
+              if ((keyHoldCountRef.current.get(spec.code) || 0) <= 0) {
+                stopKeyRepeat(spec.code);
+                return;
+              }
+              dispatchRuffleKey('keydown', spec, true);
+            }, 55);
+            repeatTimersRef.current.set(spec.code, { delayTimer: null, intervalTimer });
+          }, 160);
+          repeatTimersRef.current.set(spec.code, { delayTimer, intervalTimer: null });
         }
       }
+    };
 
-      switch (action) {
-        case 'UP':
-          dispatchRuffleKey('keydown', KEY_SPECS.ArrowUp);
-          dispatchRuffleKey('keydown', KEY_SPECS.KeyW);
-          break;
-        case 'DOWN': // 黄金矿工：下方向键放钩子！
-          dispatchRuffleKey('keydown', KEY_SPECS.ArrowDown);
-          dispatchRuffleKey('keydown', KEY_SPECS.KeyS);
-          break;
-        case 'LEFT':
-          dispatchRuffleKey('keydown', KEY_SPECS.ArrowLeft);
-          dispatchRuffleKey('keydown', KEY_SPECS.KeyA);
-          break;
-        case 'RIGHT':
-          dispatchRuffleKey('keydown', KEY_SPECS.ArrowRight);
-          dispatchRuffleKey('keydown', KEY_SPECS.KeyD);
-          break;
-        case 'A': // 主动作键：同时合并发送 空格 + 下方向键 + Z + J
-          dispatchRuffleKey('keydown', KEY_SPECS.Space);
-          dispatchRuffleKey('keydown', KEY_SPECS.ArrowDown);
-          dispatchRuffleKey('keydown', KEY_SPECS.KeyZ);
-          dispatchRuffleKey('keydown', KEY_SPECS.KeyJ);
-          break;
-        case 'B': // 副动作键：发送 上方向键(炸药) + X + K + W
-          dispatchRuffleKey('keydown', KEY_SPECS.ArrowUp);
-          dispatchRuffleKey('keydown', KEY_SPECS.KeyX);
-          dispatchRuffleKey('keydown', KEY_SPECS.KeyK);
-          dispatchRuffleKey('keydown', KEY_SPECS.KeyW);
-          break;
-        case 'SPACE': // 独立空格键
-          dispatchRuffleKey('keydown', KEY_SPECS.Space);
-          dispatchRuffleKey('keydown', KEY_SPECS.ArrowDown);
-          break;
-        case 'START':
-          dispatchRuffleKey('keydown', KEY_SPECS.Enter);
-          dispatchRuffleKey('keydown', KEY_SPECS.Space);
-          break;
-        case 'SELECT':
-          dispatchRuffleKey('keydown', KEY_SPECS.ShiftLeft);
-          break;
+    const releasePhysicalSpec = (spec) => {
+      if (!spec) return;
+      const prev = keyHoldCountRef.current.get(spec.code) || 0;
+      if (prev <= 1) {
+        keyHoldCountRef.current.delete(spec.code);
+        stopKeyRepeat(spec.code);
+        if (prev > 0) {
+          dispatchRuffleKey('keyup', spec, false);
+        }
+      } else {
+        keyHoldCountRef.current.set(spec.code, prev - 1);
       }
     };
 
-    const handleButtonUp = (action) => {
-      setPressedKey(null);
+    const syncPressedMap = () => {
+      const next = {};
+      actionHoldCountRef.current.forEach((cnt, act) => {
+        if (cnt > 0) next[act] = true;
+      });
+      setPressedMap(next);
+    };
 
-      switch (action) {
-        case 'UP':
-          dispatchRuffleKey('keyup', KEY_SPECS.ArrowUp);
-          dispatchRuffleKey('keyup', KEY_SPECS.KeyW);
-          break;
-        case 'DOWN':
-          dispatchRuffleKey('keyup', KEY_SPECS.ArrowDown);
-          dispatchRuffleKey('keyup', KEY_SPECS.KeyS);
-          break;
-        case 'LEFT':
-          dispatchRuffleKey('keyup', KEY_SPECS.ArrowLeft);
-          dispatchRuffleKey('keyup', KEY_SPECS.KeyA);
-          break;
-        case 'RIGHT':
-          dispatchRuffleKey('keyup', KEY_SPECS.ArrowRight);
-          dispatchRuffleKey('keyup', KEY_SPECS.KeyD);
-          break;
-        case 'A':
-          dispatchRuffleKey('keyup', KEY_SPECS.Space);
-          dispatchRuffleKey('keyup', KEY_SPECS.ArrowDown);
-          dispatchRuffleKey('keyup', KEY_SPECS.KeyZ);
-          dispatchRuffleKey('keyup', KEY_SPECS.KeyJ);
-          break;
-        case 'B':
-          dispatchRuffleKey('keyup', KEY_SPECS.ArrowUp);
-          dispatchRuffleKey('keyup', KEY_SPECS.KeyX);
-          dispatchRuffleKey('keyup', KEY_SPECS.KeyK);
-          dispatchRuffleKey('keyup', KEY_SPECS.KeyW);
-          break;
-        case 'SPACE':
-          dispatchRuffleKey('keyup', KEY_SPECS.Space);
-          dispatchRuffleKey('keyup', KEY_SPECS.ArrowDown);
-          break;
-        case 'START':
-          dispatchRuffleKey('keyup', KEY_SPECS.Enter);
-          dispatchRuffleKey('keyup', KEY_SPECS.Space);
-          break;
-        case 'SELECT':
-          dispatchRuffleKey('keyup', KEY_SPECS.ShiftLeft);
-          break;
+    // 2. 虚拟按键动作触发器（支持多指并发与引用计数，防丢键/卡键）
+    const engageAction = (action) => {
+      focusRufflePlayer();
+      const prev = actionHoldCountRef.current.get(action) || 0;
+      actionHoldCountRef.current.set(action, prev + 1);
+      if (prev === 0) {
+        const isDir = action === 'UP' || action === 'DOWN' || action === 'LEFT' || action === 'RIGHT';
+        resolveActionSpecs(action).forEach((spec) => pressPhysicalSpec(spec, isDir));
+        syncPressedMap();
       }
     };
 
-    // 3. 全局物理键盘事件监听与桥接（PC 实体键盘按键无缝直通 Flash 游戏）
+    const disengageAction = (action) => {
+      const prev = actionHoldCountRef.current.get(action) || 0;
+      if (prev <= 0) return;
+      if (prev === 1) {
+        actionHoldCountRef.current.delete(action);
+        resolveActionSpecs(action).forEach((spec) => releasePhysicalSpec(spec));
+        syncPressedMap();
+      } else {
+        actionHoldCountRef.current.set(action, prev - 1);
+      }
+    };
+
+    const setPointerActions = (pointerId, nextActions) => {
+      const nextSet = new Set(nextActions);
+      const prevSet = activePointerActionsRef.current.get(pointerId) || new Set();
+      prevSet.forEach((act) => {
+        if (!nextSet.has(act)) disengageAction(act);
+      });
+      nextSet.forEach((act) => {
+        if (!prevSet.has(act)) engageAction(act);
+      });
+      if (nextSet.size === 0) {
+        activePointerActionsRef.current.delete(pointerId);
+      } else {
+        activePointerActionsRef.current.set(pointerId, nextSet);
+      }
+    };
+
+    const releaseAllVirtualInputs = () => {
+      activePointerActionsRef.current.clear();
+      actionHoldCountRef.current.clear();
+      Array.from(keyHoldCountRef.current.keys()).forEach((code) => {
+        stopKeyRepeat(code);
+        const spec = KEY_SPECS[code];
+        if (spec) dispatchRuffleKey('keyup', spec, false);
+      });
+      keyHoldCountRef.current.clear();
+      setPressedMap({});
+    };
+
+    // 单键（A/B/SPACE/START/SELECT）统一 Pointer 绑定：禁止抢焦点 + 捕获指针 + 多点触控
+    const bindActionButton = (action) => ({
+      tabIndex: -1,
+      onMouseDown: (e) => e.preventDefault(),
+      onContextMenu: (e) => e.preventDefault(),
+      onPointerDown: (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+        setPointerActions(e.pointerId, [action]);
+      },
+      onPointerUp: (e) => {
+        e.preventDefault();
+        setPointerActions(e.pointerId, []);
+      },
+      onPointerCancel: (e) => {
+        setPointerActions(e.pointerId, []);
+      },
+      onLostPointerCapture: (e) => {
+        setPointerActions(e.pointerId, []);
+      },
+    });
+
+    // 一体化连续触控十字键（支持手指滑动无缝换向 + 8方向斜向并发，彻底解决小按钮断触）
+    const computeDpadDirections = (clientX, clientY) => {
+      const el = dpadRef.current;
+      if (!el) return [];
+      const rect = el.getBoundingClientRect();
+      const dx = clientX - (rect.left + rect.width / 2);
+      const dy = clientY - (rect.top + rect.height / 2);
+      const dist = Math.hypot(dx, dy);
+      if (dist < 10) return []; // 中心极小死区防止微抖误触
+      const dirs = [];
+      const ax = Math.abs(dx);
+      const ay = Math.abs(dy);
+      // 当水平/垂直分量占比足够时允许斜向双键（例如右上跳跃），主轴明显时单向精准移动
+      if (ax > 10 && ax >= ay * 0.42) dirs.push(dx < 0 ? 'LEFT' : 'RIGHT');
+      if (ay > 10 && ay >= ax * 0.42) dirs.push(dy < 0 ? 'UP' : 'DOWN');
+      return dirs;
+    };
+
+    const handleDpadPointerDown = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+      setPointerActions(e.pointerId, computeDpadDirections(e.clientX, e.clientY));
+    };
+
+    const handleDpadPointerMove = (e) => {
+      if (!activePointerActionsRef.current.has(e.pointerId) && e.buttons === 0) return;
+      e.preventDefault();
+      setPointerActions(e.pointerId, computeDpadDirections(e.clientX, e.clientY));
+    };
+
+    const handleDpadPointerEnd = (e) => {
+      setPointerActions(e.pointerId, []);
+    };
+
+    // 窗口失焦或卸载时自动释放所有虚拟按键，彻底杜绝卡键
+    useEffect(() => {
+      const onBlurOrHide = () => releaseAllVirtualInputs();
+      window.addEventListener('blur', onBlurOrHide);
+      document.addEventListener('visibilitychange', onBlurOrHide);
+      return () => {
+        window.removeEventListener('blur', onBlurOrHide);
+        document.removeEventListener('visibilitychange', onBlurOrHide);
+        releaseAllVirtualInputs();
+      };
+    }, []);
+
+    // 3. 全局物理键盘事件监听与桥接（PC 实体键盘：已聚焦时不重复双发，仅失焦时兜底转发）
     useEffect(() => {
       const handleGlobalKeyDown = (e) => {
         if (e.__fromArcadeBridge) return;
@@ -974,28 +1120,19 @@
         }
 
         const player = document.querySelector('ruffle-player');
-        if (player && document.activeElement !== player) {
-          try {
-            player.focus();
-            const canvas = player.shadowRoot && player.shadowRoot.querySelector('canvas');
-            if (canvas) canvas.focus();
-          } catch {
-            // ignore
-          }
-        }
+        if (!player) return;
 
+        // 若焦点已在 Ruffle 内，浏览器原生键盘事件会直达 WASM，不再二次重复派发
+        const isFocused = document.activeElement === player || (player.shadowRoot && player.shadowRoot.activeElement);
+        if (isFocused) return;
+
+        focusRufflePlayer();
         const spec = KEY_SPECS[e.code] || {
           code: e.code,
           key: e.key,
           keyCode: e.keyCode || e.which || 0,
         };
-
-        dispatchRuffleKey('keydown', spec);
-
-        if (e.code === 'Space') {
-          dispatchRuffleKey('keydown', KEY_SPECS.ArrowDown);
-          dispatchRuffleKey('keydown', KEY_SPECS.KeyS);
-        }
+        dispatchRuffleKey('keydown', spec, e.repeat);
       };
 
       const handleGlobalKeyUp = (e) => {
@@ -1005,18 +1142,17 @@
           e.preventDefault();
         }
 
+        const player = document.querySelector('ruffle-player');
+        if (!player) return;
+        const isFocused = document.activeElement === player || (player.shadowRoot && player.shadowRoot.activeElement);
+        if (isFocused) return;
+
         const spec = KEY_SPECS[e.code] || {
           code: e.code,
           key: e.key,
           keyCode: e.keyCode || e.which || 0,
         };
-
-        dispatchRuffleKey('keyup', spec);
-
-        if (e.code === 'Space') {
-          dispatchRuffleKey('keyup', KEY_SPECS.ArrowDown);
-          dispatchRuffleKey('keyup', KEY_SPECS.KeyS);
-        }
+        dispatchRuffleKey('keyup', spec, false);
       };
 
       window.addEventListener('keydown', handleGlobalKeyDown, { capture: true });
@@ -1326,13 +1462,14 @@
         )
       ),
 
-      // 3. 掌机中部：游戏标题滚动小条
+      // 3. 掌机中部：游戏标题与键位模式快捷切换条
       h('div', {
         style: {
-          padding: '0 20px',
+          padding: '2px 14px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          gap: '6px',
         }
       },
         h('span', {
@@ -1341,161 +1478,199 @@
             fontWeight: 900,
             color: '#475569',
             fontFamily: '"ZCOOL KuaiLe", sans-serif',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            flex: 1,
           }
         }, activeGame ? `当前: ${activeGame.title}` : '未插入卡带'),
-        h('span', {
-          style: {
-            fontSize: '10px',
-            color: '#64748B',
-            fontFamily: 'monospace',
-          }
-        }, 'PC: WASD / 方向键 / Z / X')
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 } },
+          h('button', {
+            type: 'button',
+            tabIndex: -1,
+            onMouseDown: (e) => e.preventDefault(),
+            onClick: () => {
+              releaseAllVirtualInputs();
+              setDpadMode((m) => (m === 'both' ? 'arrows' : m === 'arrows' ? 'wasd' : 'both'));
+              focusRufflePlayer();
+            },
+            title: '切换十字键映射（双发/仅方向键/仅WASD，防止双人游戏串控或双倍移速）',
+            style: {
+              fontSize: '9.5px',
+              fontWeight: 800,
+              padding: '2px 6px',
+              borderRadius: '6px',
+              border: '1.5px solid #475569',
+              background: '#F8FAFC',
+              color: '#1E293B',
+              cursor: 'pointer',
+            }
+          }, dpadMode === 'both' ? '十字:双向' : dpadMode === 'arrows' ? '十字:方向键' : '十字:WASD'),
+          h('button', {
+            type: 'button',
+            tabIndex: -1,
+            onMouseDown: (e) => e.preventDefault(),
+            onClick: () => {
+              releaseAllVirtualInputs();
+              setControlPreset((p) => (p === 'standard' ? 'miner' : 'standard'));
+              focusRufflePlayer();
+            },
+            title: '通用模式(A/B不干扰方向键) vs 矿工模式(A附带下键放钩/B附带上键炸药)',
+            style: {
+              fontSize: '9.5px',
+              fontWeight: 800,
+              padding: '2px 6px',
+              borderRadius: '6px',
+              border: '1.5px solid #475569',
+              background: controlPreset === 'miner' ? '#FEF08A' : '#E0F2FE',
+              color: '#1E293B',
+              cursor: 'pointer',
+            }
+          }, controlPreset === 'miner' ? '⛏️ 矿工键位' : '🎮 通用键位')
+        )
       ),
 
-      // 4. 掌机下部：物理按键操作区（十字方向键 + A/B动作键）
+      // 4. 掌机下部：物理按键操作区（连续触控十字方向键 + 多点触控 A/B 动作键）
       h('div', {
         style: {
           flex: 1,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-around',
-          padding: '4px 16px',
+          padding: '4px 12px',
+          touchAction: 'none',
         }
       },
-        // 左侧：实体手感十字方向键 (D-Pad)
+        // 左侧：一体化连续触控十字方向键 (D-Pad，支持滑动换向与 8 方向并发)
         h('div', {
+          ref: dpadRef,
+          onMouseDown: (e) => e.preventDefault(),
+          onContextMenu: (e) => e.preventDefault(),
+          onPointerDown: handleDpadPointerDown,
+          onPointerMove: handleDpadPointerMove,
+          onPointerUp: handleDpadPointerEnd,
+          onPointerCancel: handleDpadPointerEnd,
+          onLostPointerCapture: handleDpadPointerEnd,
           style: {
-            width: '110px',
-            height: '110px',
+            width: '124px',
+            height: '124px',
             position: 'relative',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            touchAction: 'none',
+            cursor: 'pointer',
           }
         },
           // 十字键底盘阴影槽
           h('div', {
             style: {
               position: 'absolute',
-              width: '104px',
-              height: '36px',
+              width: '112px',
+              height: '40px',
               background: '#94A3B8',
-              borderRadius: '6px',
+              borderRadius: '7px',
               boxShadow: 'inset 2px 2px 4px rgba(0,0,0,0.3)',
+              pointerEvents: 'none',
             }
           }),
           h('div', {
             style: {
               position: 'absolute',
-              width: '36px',
-              height: '104px',
+              width: '40px',
+              height: '112px',
               background: '#94A3B8',
-              borderRadius: '6px',
+              borderRadius: '7px',
               boxShadow: 'inset 2px 2px 4px rgba(0,0,0,0.3)',
+              pointerEvents: 'none',
             }
           }),
 
-          // 上键
-          h('button', {
-            onPointerDown: () => handleButtonDown('UP'),
-            onPointerUp: () => handleButtonUp('UP'),
-            onPointerLeave: () => handleButtonUp('UP'),
+          // 上键视觉
+          h('div', {
             style: {
               position: 'absolute',
-              top: '4px',
-              width: '34px',
-              height: '36px',
-              background: pressedKey === 'UP' ? '#0F172A' : '#1E293B',
+              top: '6px',
+              width: '38px',
+              height: '40px',
+              background: pressedMap.UP ? '#0284C7' : '#1E293B',
               border: '2px solid #0F172A',
-              borderRadius: '6px 6px 0 0',
-              boxShadow: pressedKey === 'UP' ? 'none' : '0 2px 0 #0F172A',
-              color: '#94A3B8',
-              cursor: 'pointer',
+              borderRadius: '7px 7px 0 0',
+              boxShadow: pressedMap.UP ? 'inset 0 2px 4px rgba(0,0,0,0.45)' : '0 2px 0 #0F172A',
+              color: pressedMap.UP ? '#FFFFFF' : '#94A3B8',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '10px',
-              padding: 0,
+              fontSize: '11px',
+              pointerEvents: 'none',
             }
           }, '▲'),
 
-          // 下键
-          h('button', {
-            onPointerDown: () => handleButtonDown('DOWN'),
-            onPointerUp: () => handleButtonUp('DOWN'),
-            onPointerLeave: () => handleButtonUp('DOWN'),
+          // 下键视觉
+          h('div', {
             style: {
               position: 'absolute',
-              bottom: '4px',
-              width: '34px',
-              height: '36px',
-              background: pressedKey === 'DOWN' ? '#0F172A' : '#1E293B',
+              bottom: '6px',
+              width: '38px',
+              height: '40px',
+              background: pressedMap.DOWN ? '#0284C7' : '#1E293B',
               border: '2px solid #0F172A',
-              borderRadius: '0 0 6px 6px',
-              boxShadow: pressedKey === 'DOWN' ? 'none' : '0 2px 0 #0F172A',
-              color: '#94A3B8',
-              cursor: 'pointer',
+              borderRadius: '0 0 7px 7px',
+              boxShadow: pressedMap.DOWN ? 'inset 0 2px 4px rgba(0,0,0,0.45)' : '0 2px 0 #0F172A',
+              color: pressedMap.DOWN ? '#FFFFFF' : '#94A3B8',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '10px',
-              padding: 0,
+              fontSize: '11px',
+              pointerEvents: 'none',
             }
           }, '▼'),
 
-          // 左键
-          h('button', {
-            onPointerDown: () => handleButtonDown('LEFT'),
-            onPointerUp: () => handleButtonUp('LEFT'),
-            onPointerLeave: () => handleButtonUp('LEFT'),
+          // 左键视觉
+          h('div', {
             style: {
               position: 'absolute',
-              left: '4px',
-              width: '36px',
-              height: '34px',
-              background: pressedKey === 'LEFT' ? '#0F172A' : '#1E293B',
+              left: '6px',
+              width: '40px',
+              height: '38px',
+              background: pressedMap.LEFT ? '#0284C7' : '#1E293B',
               border: '2px solid #0F172A',
-              borderRadius: '6px 0 0 6px',
-              boxShadow: pressedKey === 'LEFT' ? 'none' : '0 2px 0 #0F172A',
-              color: '#94A3B8',
-              cursor: 'pointer',
+              borderRadius: '7px 0 0 7px',
+              boxShadow: pressedMap.LEFT ? 'inset 0 2px 4px rgba(0,0,0,0.45)' : '0 2px 0 #0F172A',
+              color: pressedMap.LEFT ? '#FFFFFF' : '#94A3B8',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '10px',
-              padding: 0,
+              fontSize: '11px',
+              pointerEvents: 'none',
             }
           }, '◀'),
 
-          // 右键
-          h('button', {
-            onPointerDown: () => handleButtonDown('RIGHT'),
-            onPointerUp: () => handleButtonUp('RIGHT'),
-            onPointerLeave: () => handleButtonUp('RIGHT'),
+          // 右键视觉
+          h('div', {
             style: {
               position: 'absolute',
-              right: '4px',
-              width: '36px',
-              height: '34px',
-              background: pressedKey === 'RIGHT' ? '#0F172A' : '#1E293B',
+              right: '6px',
+              width: '40px',
+              height: '38px',
+              background: pressedMap.RIGHT ? '#0284C7' : '#1E293B',
               border: '2px solid #0F172A',
-              borderRadius: '0 6px 6px 0',
-              boxShadow: pressedKey === 'RIGHT' ? 'none' : '0 2px 0 #0F172A',
-              color: '#94A3B8',
-              cursor: 'pointer',
+              borderRadius: '0 7px 7px 0',
+              boxShadow: pressedMap.RIGHT ? 'inset 0 2px 4px rgba(0,0,0,0.45)' : '0 2px 0 #0F172A',
+              color: pressedMap.RIGHT ? '#FFFFFF' : '#94A3B8',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '10px',
-              padding: 0,
+              fontSize: '11px',
+              pointerEvents: 'none',
             }
           }, '▶'),
 
           // 中心圆盘
           h('div', {
             style: {
-              width: '24px',
-              height: '24px',
+              width: '26px',
+              height: '26px',
               borderRadius: '50%',
               background: '#1E293B',
               boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.6)',
@@ -1505,27 +1680,26 @@
           })
         ),
 
-        // 中间：独立空格键 (长胶囊按键，适配黄金矿工等一键放钩)
+        // 中间：独立空格键
         h('div', {
           style: {
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            margin: '0 4px',
+            margin: '0 2px',
             zIndex: 10,
           }
         },
           h('button', {
-            onPointerDown: () => handleButtonDown('SPACE'),
-            onPointerUp: () => handleButtonUp('SPACE'),
-            onPointerLeave: () => handleButtonUp('SPACE'),
+            type: 'button',
+            ...bindActionButton('SPACE'),
             style: {
-              width: '68px',
-              height: '32px',
-              borderRadius: '16px',
-              background: pressedKey === 'SPACE' ? '#1E293B' : 'radial-gradient(circle at 35% 35%, #475569 0%, #1E293B 100%)',
+              width: '66px',
+              height: '34px',
+              borderRadius: '17px',
+              background: pressedMap.SPACE ? '#1E293B' : 'radial-gradient(circle at 35% 35%, #475569 0%, #1E293B 100%)',
               border: '2px solid #0F172A',
-              boxShadow: pressedKey === 'SPACE' ? 'none' : '0 3px 0 #0F172A, 0 4px 8px rgba(0,0,0,0.25)',
+              boxShadow: pressedMap.SPACE ? 'none' : '0 3px 0 #0F172A, 0 4px 8px rgba(0,0,0,0.25)',
               color: '#FDE047',
               fontSize: '11px',
               fontWeight: 900,
@@ -1533,9 +1707,10 @@
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              transform: pressedKey === 'SPACE' ? 'translateY(2px)' : 'none',
+              transform: pressedMap.SPACE ? 'translateY(2px)' : 'none',
               fontFamily: '"ZCOOL KuaiLe", sans-serif',
               letterSpacing: '0.5px',
+              touchAction: 'none',
             }
           }, '␣ 空格'),
           h('span', {
@@ -1546,7 +1721,7 @@
               marginTop: '4px',
               fontFamily: 'monospace',
             }
-          }, '放钩/确认')
+          }, controlPreset === 'miner' ? '放钩/确认' : '跳跃/确认')
         ),
 
         // 右侧：经典斜置 A / B 圆形动作按键
@@ -1561,18 +1736,17 @@
           // B 键
           h('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center' } },
             h('button', {
-              onPointerDown: () => handleButtonDown('B'),
-              onPointerUp: () => handleButtonUp('B'),
-              onPointerLeave: () => handleButtonUp('B'),
+              type: 'button',
+              ...bindActionButton('B'),
               style: {
-                width: '44px',
-                height: '44px',
+                width: '46px',
+                height: '46px',
                 borderRadius: '50%',
-                background: pressedKey === 'B'
+                background: pressedMap.B
                   ? '#991B1B'
                   : 'radial-gradient(circle at 35% 35%, #F43F5E 0%, #BE123C 100%)',
                 border: '2.5px solid #4C0519',
-                boxShadow: pressedKey === 'B' ? 'none' : '0 4px 0 #4C0519, 0 6px 12px rgba(0,0,0,0.25)',
+                boxShadow: pressedMap.B ? 'none' : '0 4px 0 #4C0519, 0 6px 12px rgba(0,0,0,0.25)',
                 color: '#FFFFFF',
                 fontSize: '15px',
                 fontWeight: 900,
@@ -1580,7 +1754,8 @@
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                transform: pressedKey === 'B' ? 'translateY(3px)' : 'none',
+                transform: pressedMap.B ? 'translateY(3px)' : 'none',
+                touchAction: 'none',
               }
             }, 'B'),
             h('span', {
@@ -1592,24 +1767,23 @@
                 transform: 'rotate(20deg)',
                 fontFamily: 'monospace',
               }
-            }, '(炸药/X)')
+            }, controlPreset === 'miner' ? '(炸药/X)' : '(X / K)')
           ),
 
           // A 键
           h('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '-12px' } },
             h('button', {
-              onPointerDown: () => handleButtonDown('A'),
-              onPointerUp: () => handleButtonUp('A'),
-              onPointerLeave: () => handleButtonUp('A'),
+              type: 'button',
+              ...bindActionButton('A'),
               style: {
-                width: '44px',
-                height: '44px',
+                width: '46px',
+                height: '46px',
                 borderRadius: '50%',
-                background: pressedKey === 'A'
+                background: pressedMap.A
                   ? '#991B1B'
                   : 'radial-gradient(circle at 35% 35%, #F43F5E 0%, #BE123C 100%)',
                 border: '2.5px solid #4C0519',
-                boxShadow: pressedKey === 'A' ? 'none' : '0 4px 0 #4C0519, 0 6px 12px rgba(0,0,0,0.25)',
+                boxShadow: pressedMap.A ? 'none' : '0 4px 0 #4C0519, 0 6px 12px rgba(0,0,0,0.25)',
                 color: '#FFFFFF',
                 fontSize: '15px',
                 fontWeight: 900,
@@ -1617,7 +1791,8 @@
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                transform: pressedKey === 'A' ? 'translateY(3px)' : 'none',
+                transform: pressedMap.A ? 'translateY(3px)' : 'none',
+                touchAction: 'none',
               }
             }, 'A'),
             h('span', {
@@ -1629,7 +1804,7 @@
                 transform: 'rotate(20deg)',
                 fontFamily: 'monospace',
               }
-            }, '(放钩/Z)')
+            }, controlPreset === 'miner' ? '(放钩/Z)' : '(Z / J)')
           )
         )
       ),
@@ -1649,18 +1824,18 @@
         h('div', { style: { display: 'flex', gap: '16px' } },
           h('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center' } },
             h('button', {
-              onPointerDown: () => handleButtonDown('SELECT'),
-              onPointerUp: () => handleButtonUp('SELECT'),
-              onPointerLeave: () => handleButtonUp('SELECT'),
+              type: 'button',
+              ...bindActionButton('SELECT'),
               style: {
-                width: '32px',
-                height: '10px',
-                borderRadius: '5px',
-                background: pressedKey === 'SELECT' ? '#0F172A' : '#334155',
+                width: '34px',
+                height: '12px',
+                borderRadius: '6px',
+                background: pressedMap.SELECT ? '#0F172A' : '#334155',
                 border: '1.5px solid #0F172A',
-                boxShadow: pressedKey === 'SELECT' ? 'none' : '0 1.5px 0 #0F172A',
+                boxShadow: pressedMap.SELECT ? 'none' : '0 1.5px 0 #0F172A',
                 cursor: 'pointer',
                 transform: 'rotate(-25deg)',
+                touchAction: 'none',
               }
             }),
             h('span', {
@@ -1676,18 +1851,18 @@
 
           h('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center' } },
             h('button', {
-              onPointerDown: () => handleButtonDown('START'),
-              onPointerUp: () => handleButtonUp('START'),
-              onPointerLeave: () => handleButtonUp('START'),
+              type: 'button',
+              ...bindActionButton('START'),
               style: {
-                width: '32px',
-                height: '10px',
-                borderRadius: '5px',
-                background: pressedKey === 'START' ? '#0F172A' : '#334155',
+                width: '34px',
+                height: '12px',
+                borderRadius: '6px',
+                background: pressedMap.START ? '#0F172A' : '#334155',
                 border: '1.5px solid #0F172A',
-                boxShadow: pressedKey === 'START' ? 'none' : '0 1.5px 0 #0F172A',
+                boxShadow: pressedMap.START ? 'none' : '0 1.5px 0 #0F172A',
                 cursor: 'pointer',
                 transform: 'rotate(-25deg)',
+                touchAction: 'none',
               }
             }),
             h('span', {
