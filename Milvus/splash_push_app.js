@@ -1262,23 +1262,25 @@
           )
         ),
 
-        // 预留扩展提示
-        h(
-          "div",
-          {
-            style: {
-              padding: "12px 14px",
-              borderRadius: "12px",
-              border: "1px dashed #DDE4E2",
-              background: "#F6F8F7",
-              fontSize: "12px",
-              color: "#88979B",
-              textAlign: "center",
-              lineHeight: 1.6
-            }
-          },
-          "更多开屏推送（节气问候 / 名士生辰 / 纪念日海报）预留位已就绪"
-        )
+        // 二十四节气 & 重大纪念日手账贺卡设置区（独立模块挂载）
+        global.SeasonalPushUI && global.SeasonalPushUI.SettingsSection
+          ? h(global.SeasonalPushUI.SettingsSection, null)
+          : h(
+              "div",
+              {
+                style: {
+                  padding: "12px 14px",
+                  borderRadius: "12px",
+                  border: "1px dashed #DDE4E2",
+                  background: "#F6F8F7",
+                  fontSize: "12px",
+                  color: "#88979B",
+                  textAlign: "center",
+                  lineHeight: 1.6
+                }
+              },
+              "更多开屏推送（节气问候 / 名士生辰 / 纪念日海报）预留位已就绪"
+            )
       ),
 
       h(UpdateSplashPosterModal, {
@@ -1300,22 +1302,47 @@
     const h = React.createElement;
     const { useState, useEffect } = React;
     const [open, setOpen] = useState(false);
+    const [gateReady, setGateReady] = useState(() => !global.__MILVUS_ENTRY_GATE_ACTIVE__);
+    const [updatePending, setUpdatePending] = useState(() => shouldAutoShowOnBoot());
 
     useEffect(() => {
-      if (!shouldAutoShowOnBoot()) return;
+      if (gateReady) return;
+      const onEntered = () => setGateReady(true);
+      global.addEventListener("milvus-entry-gate-entered", onEntered, { once: true });
+      return () => global.removeEventListener("milvus-entry-gate-entered", onEntered);
+    }, [gateReady]);
+
+    useEffect(() => {
+      if (!gateReady) return;
+      if (!shouldAutoShowOnBoot()) {
+        setUpdatePending(false);
+        return;
+      }
       const timer = setTimeout(() => {
         setOpen(true);
         const latest = getLatestLog();
         markVersionShown(latest.id || latest.version);
       }, 450);
       return () => clearTimeout(timer);
-    }, []);
+    }, [gateReady]);
 
-    return h(UpdateSplashPosterModal, {
-      isOpen: open,
-      onClose: () => setOpen(false),
-      onOpenObservation
-    });
+    return h(
+      React.Fragment,
+      null,
+      h(UpdateSplashPosterModal, {
+        isOpen: open,
+        onClose: () => {
+          setOpen(false);
+          setUpdatePending(false);
+        },
+        onOpenObservation
+      }),
+      global.SeasonalPushUI &&
+        global.SeasonalPushUI.QueueHost &&
+        h(global.SeasonalPushUI.QueueHost, {
+          waitForUpdateClosed: !gateReady || open || updatePending
+        })
+    );
   }
 
   global.SplashPushEngine = {

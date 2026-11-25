@@ -64,6 +64,23 @@
           h("rect", { x: 3, y: 5, width: 18, height: 14, rx: 3 }),
           h("path", { d: "M6.5 14Q9.5 8.5 12.5 14T17.5 14" })
         );
+      case "chenwei_oracle": // 手绘古风八卦星盘
+        return h("svg", common,
+          h("polygon", { points: "12,2.5 18.7,5.3 21.5,12 18.7,18.7 12,21.5 5.3,18.7 2.5,12 5.3,5.3" }),
+          h("circle", { cx: 12, cy: 12, r: 4.2 }),
+          h("path", { d: "M12 7.8a2.1 2.1 0 0 1 0 4.2 2.1 2.1 0 0 0 0 4.2" }),
+          h("circle", { cx: 12, cy: 9.9, r: 0.6, fill: color }),
+          h("circle", { cx: 12, cy: 14.1, r: 0.6, fill: color })
+        );
+      case "couple_bills": // 手绘账本卷册
+        return h("svg", common,
+          h("path", { d: "M5 3.5h14v17l-3.5-2-3.5 2-3.5-2-3.5 2v-17z" }),
+          h("path", { d: "M8.5 8.5h7M8.5 12h7M8.5 15.5h4.5" })
+        );
+      case "couple_wish": // 手绘星愿五芒
+        return h("svg", common,
+          h("path", { d: "M12 3.2l2.4 5.1 5.6.8-4.1 3.9 1 5.6L12 15.9 7.1 18.6l1-5.6-4.1-3.9 5.6-.8z" })
+        );
       case "caret_down": // 倒三角展开符号
         return h("svg", { ...common, stroke: "none", fill: color },
           h("path", { d: "M6.5 9l5.5 6.5L17.5 9z" })
@@ -286,9 +303,29 @@
     const [lastChatQuote, setLastChatQuote] = useState("");
     const [calendarTasks, setCalendarTasks] = useState([]);
     const [calendarOwnerName, setCalendarOwnerName] = useState("我的未竟之事");
+    const [chenweiData, setChenweiData] = useState(null);
+    const [chenweiForm, setChenweiForm] = useState(() => widget.config?.verseForm || "poem");
+    const [chenweiExpandedModal, setChenweiExpandedModal] = useState(false);
+    const [coupleBillsData, setCoupleBillsData] = useState(null);
+    const [coupleBillsMeta, setCoupleBillsMeta] = useState({ charName: "TA", avatar: "" });
+    const [billsExpandedModal, setBillsExpandedModal] = useState(false);
+    const [billsModalTab, setBillsModalTab] = useState(() => widget.config?.ledgerTab === "user" ? "user" : "ta");
+    const [coupleWishData, setCoupleWishData] = useState(null);
+    const [coupleWishMeta, setCoupleWishMeta] = useState({ charId: "", charName: "TA", avatar: "" });
+    const [wishExpandedModal, setWishExpandedModal] = useState(false);
+    const [wishSentTip, setWishSentTip] = useState("");
     const [foldExpandedModal, setFoldExpandedModal] = useState(false);
     const [quoteExpandedModal, setQuoteExpandedModal] = useState(false);
     const photoSwipeRef = React.useRef({ x: 0, moved: false });
+
+    // 将弹窗挂载至 document.body，彻底规避桌面横滑容器 transform 导致的 position:fixed 偏移至锁屏页问题
+    const renderInPortal = (node) => {
+      if (!node) return null;
+      if (global.ReactDOM && typeof global.ReactDOM.createPortal === "function" && global.document && global.document.body) {
+        return global.ReactDOM.createPortal(node, global.document.body);
+      }
+      return node;
+    };
 
     // 留声机播放态与真实 <audio> 联动状态
     const [musicPlaying, setMusicPlaying] = useState(true);
@@ -389,6 +426,160 @@
       global.addEventListener("calendar_tasks_updated", refresh);
       return () => global.removeEventListener("calendar_tasks_updated", refresh);
     }, [widget.type, widget.config?.ownerFilter]);
+
+    // 谶纬签匣数据加载与实时更新监听（支持我的历史签 & 名士专属签）
+    useEffect(() => {
+      if (widget.type !== "chenwei_oracle") return;
+      setChenweiForm(widget.config?.verseForm || "poem");
+      let alive = true;
+      const loadChenwei = async () => {
+        const Oracle = global.ChenweiAiOracle;
+        if (!Oracle) return;
+        const mode = widget.config?.sourceMode === "char_prophecy" ? "char_prophecy" : "my_oracle";
+        try {
+          if (mode === "char_prophecy") {
+            const allProps = Oracle.loadAllCharProphecies ? await Oracle.loadAllCharProphecies() : {};
+            const targetCid = String(widget.config?.charId || "");
+            const hit = (targetCid && allProps[targetCid]) || Object.values(allProps)[0] || null;
+            if (!hit) {
+              if (alive) setChenweiData(null);
+              return;
+            }
+            let av = "";
+            try {
+              const chars = Oracle.loadAllCharacters ? await Oracle.loadAllCharacters() : [];
+              const cObj = chars.find((c) => String(c.id) === String(hit.charId));
+              if (cObj && Oracle.resolveCharAvatarUrl) av = await Oracle.resolveCharAvatarUrl(cObj);
+            } catch (e) {}
+            const fb = Oracle.buildOfflineTriVerses ? Oracle.buildOfflineTriVerses(hit.analysis || {}, hit.question || "") : {};
+            const v = hit.verses && typeof hit.verses === "object" ? hit.verses : {};
+            if (alive) {
+              setChenweiData({
+                mode: "char_prophecy",
+                ownerLabel: `${hit.charName || "名士"}的谶纬`,
+                avatar: av,
+                hexagram: hit.hexagram || "紫微照命",
+                buildTitle: hit.buildTitle || "",
+                question: hit.question || "",
+                verses: {
+                  poem: v.poem || hit.oracleVerse || fb.poem || "",
+                  ballad: v.ballad || fb.ballad || "",
+                  chenyu: v.chenyu || fb.chenyu || ""
+                },
+                chenyuGloss: hit.chenyuGloss || fb.chenyuGloss || "",
+                note: hit.charNote || ""
+              });
+            }
+          } else {
+            const recs = Oracle.loadOracleRecords ? await Oracle.loadOracleRecords(30) : [];
+            const targetId = String(widget.config?.recordId || "");
+            const hit = (targetId && recs.find((r) => String(r.id) === targetId)) || recs[0] || null;
+            if (!hit) {
+              if (alive) setChenweiData(null);
+              return;
+            }
+            const fb = Oracle.buildOfflineTriVerses ? Oracle.buildOfflineTriVerses(hit.analysis || {}, hit.question || "") : {};
+            const v = hit.verses && typeof hit.verses === "object" ? hit.verses : {};
+            if (alive) {
+              setChenweiData({
+                mode: "my_oracle",
+                ownerLabel: "我的卦签",
+                avatar: "",
+                hexagram: hit.hexagram || "谶纬卦签",
+                buildTitle: "",
+                question: hit.question || "",
+                verses: {
+                  poem: v.poem || hit.oracleVerse || fb.poem || "",
+                  ballad: v.ballad || fb.ballad || "",
+                  chenyu: v.chenyu || fb.chenyu || ""
+                },
+                chenyuGloss: hit.chenyuGloss || fb.chenyuGloss || "",
+                note: hit.advice || hit.structureReading || ""
+              });
+            }
+          }
+        } catch (e) {}
+      };
+      loadChenwei();
+      global.addEventListener("chenwei_oracle_updated", loadChenwei);
+      return () => {
+        alive = false;
+        global.removeEventListener("chenwei_oracle_updated", loadChenwei);
+      };
+    }, [widget.type, widget.config?.sourceMode, widget.config?.recordId, widget.config?.charId, widget.config?.verseForm]);
+
+    // 共同账本数据加载与实时刷新监听（桌面严格截取最新 5 条，详览保留全量）
+    useEffect(() => {
+      if (widget.type !== "couple_bills") return;
+      let alive = true;
+      const ledgerTab = widget.config?.ledgerTab || "ta";
+      setBillsModalTab(ledgerTab === "user" ? "user" : "ta");
+      const refreshBills = async () => {
+        const Helper = global.CoupleBillDataHelper;
+        if (!Helper) return;
+        const data = Helper.loadBillsForWidget({
+          charId: widget.config?.charId || "",
+          ledgerTab,
+          limit: 5
+        });
+        if (!alive) return;
+        setCoupleBillsData(data);
+        if (data.charId) {
+          try {
+            const list = global.chatCharacterStore ? await global.chatCharacterStore.getAll() : [];
+            const hit = (list || []).find((c) => String(c.id) === String(data.charId));
+            if (hit && alive) {
+              let av = "";
+              if (global.ChenweiAiOracle && global.ChenweiAiOracle.resolveCharAvatarUrl) {
+                av = await global.ChenweiAiOracle.resolveCharAvatarUrl(hit);
+              }
+              if (alive) setCoupleBillsMeta({ charName: hit.name || "TA", avatar: av });
+            }
+          } catch (e) {}
+        }
+      };
+      refreshBills();
+      global.addEventListener("couple_bills_updated", refreshBills);
+      return () => {
+        alive = false;
+        global.removeEventListener("couple_bills_updated", refreshBills);
+      };
+    }, [widget.type, widget.config?.charId, widget.config?.ledgerTab]);
+
+    // 心愿签数据加载与实时刷新监听（只取最新 1 条愿望，优先未实现）
+    useEffect(() => {
+      if (widget.type !== "couple_wish") return;
+      let alive = true;
+      const refreshWish = async () => {
+        const Bridge = global.CoupleWishBridge;
+        if (!Bridge) return;
+        const data = Bridge.loadLatestWishForWidget({
+          charId: widget.config?.charId || "",
+          creatorFilter: widget.config?.creatorFilter || "all"
+        });
+        if (!alive) return;
+        setCoupleWishData(data);
+        if (data.charId) {
+          try {
+            const list = global.chatCharacterStore ? await global.chatCharacterStore.getAll() : [];
+            const hit = (list || []).find((c) => String(c.id) === String(data.charId));
+            if (hit && alive) {
+              let av = "";
+              if (global.ChenweiAiOracle && global.ChenweiAiOracle.resolveCharAvatarUrl) {
+                av = await global.ChenweiAiOracle.resolveCharAvatarUrl(hit);
+              }
+              if (alive) setCoupleWishMeta({ charId: String(hit.id), charName: hit.name || "TA", avatar: av });
+            }
+          } catch (e) {}
+        }
+      };
+      refreshWish();
+      global.addEventListener("couple_wishlist_updated", refreshWish);
+      return () => {
+        alive = false;
+        global.removeEventListener("couple_wishlist_updated", refreshWish);
+      };
+    }, [widget.type, widget.config?.charId, widget.config?.creatorFilter]);
 
     // 相册多图自动轮播定时器（页面后台自动暂停）
     useEffect(() => {
@@ -543,6 +734,23 @@
         if (onQuickAction) onQuickAction("music");
       };
 
+      const effectivePlayMode = (musicBridge && musicBridge.playMode) || "loop";
+      const handleCycleMode = (e) => {
+        e.stopPropagation();
+        if (musicBridge && typeof musicBridge.onCyclePlayMode === "function") {
+          musicBridge.onCyclePlayMode();
+        } else if (onQuickAction) {
+          onQuickAction("music");
+        }
+      };
+      const modeColor = effectivePlayMode === "single" ? "#C84B31" : (effectivePlayMode === "shuffle" ? primaryCol : mutedCol);
+      const modeLabel = global.MusicIconsSvg ? global.MusicIconsSvg.getPlayModeLabel(effectivePlayMode) : "循环模式";
+      const renderModeSvg = (sz) => (
+        global.MusicIconsSvg
+          ? global.MusicIconsSvg.renderPlayModeIcon(h, effectivePlayMode, { size: sz, color: modeColor })
+          : WidgetSvg(h, "airplay", { size: sz, color: modeColor })
+      );
+
       // 封面优先级：用户在 IndexedDB 自定义上传的封面 > 歌曲自带封面 > 浅灰水墨山影极简矢量封面
       const effectiveCoverUrl = photoUrl || (liveSong && (liveSong.cover || liveSong.pic || liveSong.albumCover)) || "";
       const coverBox = effectiveCoverUrl
@@ -590,6 +798,9 @@
               h("div", { style: { flex: 1, minWidth: 0 } },
                 h("div", { className: "hw-music-title", style: { fontSize: "12.5px", fontWeight: 800, color: primaryCol, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, titleText),
                 h("div", { className: "hw-music-artist", style: { fontSize: "10.5px", color: mutedCol, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, artistText)
+              ),
+              h("button", { type: "button", title: modeLabel, onClick: handleCycleMode, style: { border: "none", background: "transparent", padding: "3px", cursor: "pointer" } },
+                renderModeSvg(14)
               ),
               h("button", { type: "button", onClick: togglePlay, style: { border: "none", background: "transparent", padding: "3px", cursor: "pointer", color: primaryCol } },
                 WidgetSvg(h, effectivePlaying ? "pause" : "play", { size: 17, color: primaryCol })
@@ -640,8 +851,19 @@
             h("button", { type: "button", onClick: handleNext, style: { border: "none", background: "transparent", padding: "2px", cursor: "pointer" } },
               WidgetSvg(h, "next", { size: isSquare ? 20 : 15, color: primaryCol })
             ),
-            h("button", { type: "button", onClick: openMusicApp, style: { border: "none", background: "transparent", padding: "2px", cursor: "pointer" } },
-              WidgetSvg(h, "airplay", { size: isSquare ? 18 : 14, color: mutedCol })
+            h("button", {
+              type: "button",
+              title: modeLabel,
+              onClick: handleCycleMode,
+              style: {
+                border: "none",
+                background: effectivePlayMode === "single" ? "rgba(200, 75, 49, 0.12)" : "transparent",
+                borderRadius: "999px",
+                padding: "3px",
+                cursor: "pointer"
+              }
+            },
+              renderModeSvg(isSquare ? 18 : 14)
             )
           )
         ),
@@ -682,35 +904,37 @@
           (e) => { e.stopPropagation(); setFoldExpandedModal(true); }
         ),
         foldExpandedModal &&
-          h(
-            "div",
-            {
-              onClick: (e) => { e.stopPropagation(); if (e.target === e.currentTarget) setFoldExpandedModal(false); },
-              onPointerDown: (e) => e.stopPropagation(),
-              style: { position: "fixed", inset: 0, zIndex: 99994, background: "rgba(30,34,28,0.42)", display: "flex", alignItems: "center", justifyContent: "center", padding: "18px" }
-            },
+          renderInPortal(
             h(
               "div",
-              { style: { width: "100%", maxWidth: "320px", background: "#FAF8F3", borderRadius: "20px", padding: "16px", border: "1px solid #E2DDD0", boxShadow: "0 14px 36px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", gap: "10px", color: "#3A4233" } },
-              h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
-                h("div", null,
-                  h("div", { style: { fontSize: "15px", fontWeight: 800 } }, "折叠式卡片"),
-                  h("div", { style: { fontSize: "11.5px", color: "#7A826E", marginTop: "2px" } }, subStr)
+              {
+                onClick: (e) => { e.stopPropagation(); if (e.target === e.currentTarget) setFoldExpandedModal(false); },
+                onPointerDown: (e) => e.stopPropagation(),
+                style: { position: "fixed", inset: 0, zIndex: 99994, background: "rgba(30,34,28,0.42)", display: "flex", alignItems: "center", justifyContent: "center", padding: "18px" }
+              },
+              h(
+                "div",
+                { style: { width: "100%", maxWidth: "320px", background: "#FAF8F3", borderRadius: "20px", padding: "16px", border: "1px solid #E2DDD0", boxShadow: "0 14px 36px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", gap: "10px", color: "#3A4233" } },
+                h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
+                  h("div", null,
+                    h("div", { style: { fontSize: "15px", fontWeight: 800 } }, "折叠式卡片"),
+                    h("div", { style: { fontSize: "11.5px", color: "#7A826E", marginTop: "2px" } }, subStr)
+                  ),
+                  h("button", { type: "button", onClick: () => setFoldExpandedModal(false), style: { border: "none", background: "#EFECE4", borderRadius: "50%", width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" } }, WidgetSvg(h, "close", { size: 15, color: "#5A6252" }))
                 ),
-                h("button", { type: "button", onClick: () => setFoldExpandedModal(false), style: { border: "none", background: "#EFECE4", borderRadius: "50%", width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" } }, WidgetSvg(h, "close", { size: 15, color: "#5A6252" }))
-              ),
-              suggestions.length > 0
-                ? h("div", { style: { display: "flex", flexDirection: "column", gap: "6px", fontSize: "12.5px", lineHeight: 1.6, background: "#FFFFFF", padding: "10px 12px", borderRadius: "12px" } },
-                    suggestions.map((s, idx) => h("div", { key: idx }, `• ${s}`)),
-                    wa.characterName && h("div", { style: { textAlign: "right", fontSize: "11px", color: "#8A927A", marginTop: "4px" } }, `—— 来自 ${wa.characterName} 的关照`)
-                  )
-                : h("div", { style: { fontSize: "12px", color: "#8A927A", textAlign: "center", padding: "12px 0", background: "#FFFFFF", borderRadius: "12px" } }, "暂无角色天气叮嘱，可进入「天气」选择名士获取"),
-              foldCardBridge && foldCardBridge.onOpenFoldSettings &&
-                h("button", {
-                  type: "button",
-                  onClick: () => { setFoldExpandedModal(false); foldCardBridge.onOpenFoldSettings(); },
-                  style: { border: "none", borderRadius: "10px", background: "#6D735B", color: "#FFF", padding: "9px", fontSize: "12.5px", fontWeight: 700, cursor: "pointer" }
-                }, "卡片装扮设置")
+                suggestions.length > 0
+                  ? h("div", { style: { display: "flex", flexDirection: "column", gap: "6px", fontSize: "12.5px", lineHeight: 1.6, background: "#FFFFFF", padding: "10px 12px", borderRadius: "12px" } },
+                      suggestions.map((s, idx) => h("div", { key: idx }, `• ${s}`)),
+                      wa.characterName && h("div", { style: { textAlign: "right", fontSize: "11px", color: "#8A927A", marginTop: "4px" } }, `—— 来自 ${wa.characterName} 的关照`)
+                    )
+                  : h("div", { style: { fontSize: "12px", color: "#8A927A", textAlign: "center", padding: "12px 0", background: "#FFFFFF", borderRadius: "12px" } }, "暂无角色天气叮嘱，可进入「天气」选择名士获取"),
+                foldCardBridge && foldCardBridge.onOpenFoldSettings &&
+                  h("button", {
+                    type: "button",
+                    onClick: () => { setFoldExpandedModal(false); foldCardBridge.onOpenFoldSettings(); },
+                    style: { border: "none", borderRadius: "10px", background: "#6D735B", color: "#FFF", padding: "9px", fontSize: "12.5px", fontWeight: 700, cursor: "pointer" }
+                  }, "卡片装扮设置")
+              )
             )
           )
       );
@@ -986,41 +1210,534 @@
           }
         ),
         quoteExpandedModal &&
-          h(
-            "div",
-            {
-              onClick: (e) => { e.stopPropagation(); if (e.target === e.currentTarget) setQuoteExpandedModal(false); },
-              onPointerDown: (e) => e.stopPropagation(),
-              style: { position: "fixed", inset: 0, zIndex: 99994, background: "rgba(30,34,28,0.42)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }
-            },
+          renderInPortal(
             h(
               "div",
-              { style: { width: "100%", maxWidth: "310px", background: "#FAF8F3", borderRadius: "20px", padding: "16px", border: "1px solid #E2DDD0", boxShadow: "0 14px 36px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", gap: "10px", color: "#3A4233" } },
-              h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
-                h("div", { style: { display: "flex", alignItems: "center", gap: "8px" } },
-                  charInfo.avatar && h("img", { src: charInfo.avatar, alt: charInfo.name, style: { width: "28px", height: "28px", borderRadius: "50%", objectFit: "cover" } }),
-                  h("span", { style: { fontSize: "14px", fontWeight: 800 } }, `${charInfo.name} · 语录签`)
+              {
+                onClick: (e) => { e.stopPropagation(); if (e.target === e.currentTarget) setQuoteExpandedModal(false); },
+                onPointerDown: (e) => e.stopPropagation(),
+                style: { position: "fixed", inset: 0, zIndex: 99994, background: "rgba(30,34,28,0.42)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }
+              },
+              h(
+                "div",
+                { style: { width: "100%", maxWidth: "310px", background: "#FAF8F3", borderRadius: "20px", padding: "16px", border: "1px solid #E2DDD0", boxShadow: "0 14px 36px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", gap: "10px", color: "#3A4233" } },
+                h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
+                  h("div", { style: { display: "flex", alignItems: "center", gap: "8px" } },
+                    charInfo.avatar && h("img", { src: charInfo.avatar, alt: charInfo.name, style: { width: "28px", height: "28px", borderRadius: "50%", objectFit: "cover" } }),
+                    h("span", { style: { fontSize: "14px", fontWeight: 800 } }, `${charInfo.name} · 语录签`)
+                  ),
+                  h("button", { type: "button", onClick: () => setQuoteExpandedModal(false), style: { border: "none", background: "#EFECE4", borderRadius: "50%", width: "26px", height: "26px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" } }, WidgetSvg(h, "close", { size: 14, color: "#5A6252" }))
                 ),
-                h("button", { type: "button", onClick: () => setQuoteExpandedModal(false), style: { border: "none", background: "#EFECE4", borderRadius: "50%", width: "26px", height: "26px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" } }, WidgetSvg(h, "close", { size: 14, color: "#5A6252" }))
-              ),
-              h("div", { style: { background: "#FFFFFF", borderRadius: "12px", padding: "12px", fontSize: "13px", lineHeight: 1.7, display: "flex", flexDirection: "column", gap: "5px" } },
-                parsedLines.map((ln, idx) =>
-                  ln.bullet
-                    ? h("div", { key: idx, style: { display: "flex", alignItems: "flex-start", gap: "6px" } },
-                        h("span", { style: { width: "5px", height: "5px", borderRadius: "50%", backgroundColor: "#6D735B", marginTop: "8px", flexShrink: 0 } }),
-                        h("span", null, ln.text)
-                      )
-                    : h("div", { key: idx }, ln.text)
-                )
-              ),
-              onOpenSettings &&
-                h("button", { type: "button", onClick: () => { setQuoteExpandedModal(false); onOpenSettings(widget.id); }, style: { border: "none", borderRadius: "10px", background: "#6D735B", color: "#FFF", padding: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer" } }, "编辑语录与样式")
+                h("div", { style: { background: "#FFFFFF", borderRadius: "12px", padding: "12px", fontSize: "13px", lineHeight: 1.7, display: "flex", flexDirection: "column", gap: "5px" } },
+                  parsedLines.map((ln, idx) =>
+                    ln.bullet
+                      ? h("div", { key: idx, style: { display: "flex", alignItems: "flex-start", gap: "6px" } },
+                          h("span", { style: { width: "5px", height: "5px", borderRadius: "50%", backgroundColor: "#6D735B", marginTop: "8px", flexShrink: 0 } }),
+                          h("span", null, ln.text)
+                        )
+                      : h("div", { key: idx }, ln.text)
+                  )
+                ),
+                onOpenSettings &&
+                  h("button", { type: "button", onClick: () => { setQuoteExpandedModal(false); onOpenSettings(widget.id); }, style: { border: "none", borderRadius: "10px", background: "#6D735B", color: "#FFF", padding: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer" } }, "编辑语录与样式")
+              )
             )
           )
       );
     }
 
-    // 6. 日程便签（读取日历-未竟之事，支持筛选用户/指定角色，智能换行防截断，点击跳转日历页）
+    // 6. 谶纬签匣（展示我的历史卦签或名士专属签，桌面原地可切诗签/童谣/图谶）
+    if (widget.type === "chenwei_oracle") {
+      const formOrder = ["poem", "ballad", "chenyu"];
+      const formLabels = { poem: "诗签", ballad: "童谣", chenyu: "图谶" };
+      const activeVerse = chenweiData
+        ? String((chenweiData.verses && chenweiData.verses[chenweiForm]) || (chenweiData.verses && chenweiData.verses.poem) || "").trim()
+        : "";
+      const cycleForm = (e) => {
+        e.stopPropagation();
+        const idx = formOrder.indexOf(chenweiForm);
+        setChenweiForm(formOrder[(idx + 1) % formOrder.length]);
+      };
+      const handleCardTap = (e) => {
+        if (chenweiData) {
+          e.stopPropagation();
+          setChenweiExpandedModal(true);
+        } else if (onQuickAction) {
+          onQuickAction("chenwei");
+        }
+      };
+
+      return h(
+        React.Fragment,
+        null,
+        wrapCard(
+          chenweiData
+            ? h(
+                "div",
+                {
+                  onClick: handleCardTap,
+                  style: { display: "flex", flexDirection: "column", height: "100%", gap: isCompact2x1 ? "3px" : "6px", minHeight: 0 }
+                },
+                h(
+                  "div",
+                  { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "5px", flexShrink: 0 } },
+                  h(
+                    "div",
+                    { style: { display: "flex", alignItems: "center", gap: "5px", minWidth: 0 } },
+                    chenweiData.avatar
+                      ? h("img", { src: chenweiData.avatar, alt: chenweiData.ownerLabel, style: { width: isSquare ? "22px" : "18px", height: isSquare ? "22px" : "18px", borderRadius: "50%", objectFit: "cover", flexShrink: 0 } })
+                      : WidgetSvg(h, "chenwei_oracle", { size: isSquare ? 15 : 13, color: skin.accent }),
+                    h(
+                      "span",
+                      {
+                        className: "hw-chenwei-hex",
+                        style: { fontSize: isCompact2x1 ? "10.5px" : "11.5px", fontWeight: 800, color: skin.accent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }
+                      },
+                      chenweiData.hexagram
+                    )
+                  ),
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      onClick: cycleForm,
+                      title: "点击切换 诗签 / 童谣 / 图谶",
+                      style: {
+                        border: `1px solid ${skin.accent}`,
+                        background: "transparent",
+                        color: skin.accent,
+                        borderRadius: "5px",
+                        padding: "1px 5px",
+                        fontSize: "9.5px",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        flexShrink: 0
+                      }
+                    },
+                    formLabels[chenweiForm] || "诗签"
+                  )
+                ),
+                h(
+                  "div",
+                  {
+                    className: "hw-chenwei-verse no-scrollbar",
+                    style: {
+                      flex: 1,
+                      minHeight: 0,
+                      overflowY: "auto",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: isSquare ? "center" : "flex-start",
+                      textAlign: isSquare || chenweiForm === "ballad" ? "center" : "left",
+                      fontSize: isSquare ? "12.5px" : isCompact2x1 ? "10.5px" : "11.5px",
+                      fontWeight: 600,
+                      lineHeight: isCompact2x1 ? 1.42 : 1.6,
+                      whiteSpace: "pre-line",
+                      wordBreak: "break-word"
+                    }
+                  },
+                  activeVerse
+                ),
+                (isSquare || isWide3) &&
+                  h(
+                    "div",
+                    { style: { fontSize: "10px", color: skin.subText, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0, borderTop: isSquare ? `1px dashed ${skin.border}` : "none", paddingTop: isSquare ? "4px" : "0" } },
+                    `${chenweiData.ownerLabel}${chenweiData.question ? ` · ${chenweiData.question}` : ""}`
+                  )
+              )
+            : h(
+                "div",
+                {
+                  onClick: () => onQuickAction && onQuickAction("chenwei"),
+                  style: { height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "5px", textAlign: "center" }
+                },
+                WidgetSvg(h, "chenwei_oracle", { size: isSquare ? 24 : 18, color: skin.accent }),
+                h("div", { style: { fontSize: "11.5px", fontWeight: 700, color: skin.text } }, "谶纬签匣"),
+                h("div", { style: { fontSize: "10px", color: skin.subText } }, "点此前往小摊起卦")
+              )
+        ),
+        chenweiExpandedModal && chenweiData &&
+          renderInPortal(
+            h(
+              "div",
+              {
+                onClick: (e) => { e.stopPropagation(); if (e.target === e.currentTarget) setChenweiExpandedModal(false); },
+                onPointerDown: (e) => e.stopPropagation(),
+                style: { position: "fixed", inset: 0, zIndex: 99995, background: "rgba(38,30,22,0.48)", display: "flex", alignItems: "center", justifyContent: "center", padding: "18px" }
+              },
+              h(
+                "div",
+                {
+                  onClick: (e) => e.stopPropagation(),
+                  style: { width: "100%", maxWidth: "340px", maxHeight: "80vh", overflowY: "auto", background: "#FAF6EE", border: "1.5px solid #D4A03C", borderRadius: "18px", padding: "15px", boxShadow: "0 16px 40px rgba(38,30,22,0.28)", display: "flex", flexDirection: "column", gap: "10px", color: "#3E342B" }
+                },
+                h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" } },
+                  h("div", { style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "14px", fontWeight: 900, color: "#C84B31" } },
+                    WidgetSvg(h, "chenwei_oracle", { size: 17, color: "#C84B31" }),
+                    h("span", null, chenweiData.hexagram)
+                  ),
+                  h("button", { type: "button", onClick: () => setChenweiExpandedModal(false), style: { border: "none", background: "transparent", cursor: "pointer", padding: "4px" } }, WidgetSvg(h, "close", { size: 17, color: "#6B5A49" }))
+                ),
+                h("div", { style: { fontSize: "11.5px", color: "#7D6B59" } }, `${chenweiData.ownerLabel}${chenweiData.question ? ` · 所问：${chenweiData.question}` : ""}`),
+                h("div", { style: { display: "flex", gap: "5px", background: "#EFE7D8", padding: "4px", borderRadius: "10px" } },
+                  [
+                    { id: "poem", label: "古诗签" },
+                    { id: "ballad", label: "东汉童谣" },
+                    { id: "chenyu", label: "图谶秘语" }
+                  ].map((fm) =>
+                    h("button", {
+                      key: fm.id,
+                      type: "button",
+                      onClick: () => setChenweiForm(fm.id),
+                      style: { flex: 1, border: "none", borderRadius: "7px", padding: "5px 4px", fontSize: "11px", fontWeight: 800, background: chenweiForm === fm.id ? "#C84B31" : "transparent", color: chenweiForm === fm.id ? "#FFFDF7" : "#5C4738", cursor: "pointer" }
+                    }, fm.label)
+                  )
+                ),
+                h("div", { style: { background: "#FFFDF8", borderLeft: "3.5px solid #C84B31", borderRadius: "9px", padding: "10px 12px", whiteSpace: "pre-line", fontSize: "13px", fontWeight: 700, lineHeight: 1.8, textAlign: chenweiForm === "ballad" ? "center" : "left" } }, activeVerse),
+                chenweiForm === "chenyu" && chenweiData.chenyuGloss &&
+                  h("div", { style: { fontSize: "11.5px", color: "#7B5630", background: "#F8EEDB", borderRadius: "8px", padding: "6px 8px", border: "1px dashed #D8B884" } }, chenweiData.chenyuGloss),
+                chenweiData.note &&
+                  h("div", { style: { fontSize: "12px", lineHeight: 1.6, color: "#5C4738", background: "#F2EAE0", borderRadius: "9px", padding: "8px 10px" } }, chenweiData.note),
+                h("div", { style: { display: "flex", gap: "8px" } },
+                  h("button", {
+                    type: "button",
+                    onClick: () => { setChenweiExpandedModal(false); if (onQuickAction) onQuickAction("chenwei"); },
+                    style: { flex: 1, border: "none", borderRadius: "10px", background: "#C84B31", color: "#FFFDF7", padding: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }
+                  }, "进入谶纬小摊"),
+                  onOpenSettings &&
+                    h("button", {
+                      type: "button",
+                      onClick: () => { setChenweiExpandedModal(false); onOpenSettings(widget.id); },
+                      style: { flex: 1, border: "1px solid #D5C5B0", borderRadius: "10px", background: "#FFF", color: "#4A3C31", padding: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }
+                    }, "更换签卷/样式")
+                )
+              )
+            )
+          )
+      );
+    }
+
+    // 7. 共同账本（桌面严格展示最新 5 笔收支，点击 Portal 弹层查看全量与名士 note 批注）
+    if (widget.type === "couple_bills") {
+      const data = coupleBillsData || { displayItems: [], allItems: [], taBills: [], userBills: [], expense: 0, income: 0 };
+      const ledgerTab = widget.config?.ledgerTab || "ta";
+      const titleLabel = ledgerTab === "user"
+        ? "我的账本"
+        : ledgerTab === "both"
+          ? `${coupleBillsMeta.charName} · 共同账本`
+          : `${coupleBillsMeta.charName}的账本`;
+      const items = data.displayItems || [];
+      const modalList = billsModalTab === "user" ? (data.userBills || []) : (data.taBills || []);
+      const BillRowComp = global.CoupleBillItemRow;
+
+      return h(
+        React.Fragment,
+        null,
+        wrapCard(
+          h(
+            "div",
+            {
+              onClick: (e) => { e.stopPropagation(); setBillsExpandedModal(true); },
+              style: { display: "flex", flexDirection: "column", height: "100%", gap: isCompact2x1 ? "3px" : "5px", minHeight: 0 }
+            },
+            // 顶栏：名士头像/账本标题 + 收支小胶囊
+            h(
+              "div",
+              { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "5px", flexShrink: 0 } },
+              h(
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: "5px", minWidth: 0 } },
+                coupleBillsMeta.avatar && ledgerTab !== "user"
+                  ? h("img", { src: coupleBillsMeta.avatar, alt: coupleBillsMeta.charName, style: { width: isSquare ? "20px" : "16px", height: isSquare ? "20px" : "16px", borderRadius: "50%", objectFit: "cover", flexShrink: 0 } })
+                  : WidgetSvg(h, "couple_bills", { size: 13, color: skin.accent }),
+                h("span", { style: { fontSize: isCompact2x1 ? "10.5px" : "11.5px", fontWeight: 800, color: skin.accent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, titleLabel)
+              ),
+              h(
+                "div",
+                { className: "hw-bill-summary", style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "9.5px", fontWeight: 800, flexShrink: 0 } },
+                h("span", { style: { color: "#D6724B" } }, `-¥${data.expense}`),
+                !isCompact2x1 && h("span", { style: { color: "#5A8F6D" } }, `+¥${data.income}`)
+              )
+            ),
+
+            // 流水区：严格仅展示最新 5 条，智能换行防截断
+            items.length > 0
+              ? h(
+                  "div",
+                  { className: "no-scrollbar", style: { flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: isSquare ? "4px" : "2.5px" } },
+                  items.map((b, i) => {
+                    const isExp = b.type !== "income";
+                    const hasNote = Boolean(String(b.note || "").trim());
+                    return h(
+                      "div",
+                      {
+                        key: b.id || i,
+                        className: "hw-bill-row",
+                        style: {
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "1px",
+                          paddingBottom: isSquare ? "3px" : "1px",
+                          borderBottom: isSquare && i < items.length - 1 ? `1px dashed ${skin.border}` : "none"
+                        }
+                      },
+                      h(
+                        "div",
+                        { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "6px", fontSize: isSquare ? "11px" : "10px", lineHeight: 1.38 } },
+                        h("span", { style: { flex: 1, minWidth: 0, whiteSpace: "normal", wordBreak: "break-word" } },
+                          ledgerTab === "both" ? `[${b._owner === "user" ? "我" : "TA"}] ` : "",
+                          b.category,
+                          hasNote && h("span", { style: { display: "inline-block", width: "4px", height: "4px", borderRadius: "50%", backgroundColor: "#C84B31", marginLeft: "4px", verticalAlign: "middle" } })
+                        ),
+                        h("span", { className: "hw-bill-amount", style: { color: isExp ? "#D6724B" : "#5A8F6D", fontWeight: 800, flexShrink: 0, whiteSpace: "nowrap" } },
+                          `${isExp ? "-" : "+"}¥${b.amount}`
+                        )
+                      ),
+                      isSquare && hasNote &&
+                        h("div", { style: { fontSize: "9.5px", color: skin.subText, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" } }, b.note)
+                    );
+                  })
+                )
+              : h(
+                  "div",
+                  { style: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", fontSize: "10.5px", color: skin.subText } },
+                  h("span", null, "暂无记账记录"),
+                  h("span", { style: { fontSize: "9.5px", opacity: 0.8 } }, "点击前往情侣空间记一笔")
+                )
+          )
+        ),
+        billsExpandedModal &&
+          renderInPortal(
+            h(
+              "div",
+              {
+                onClick: (e) => { e.stopPropagation(); if (e.target === e.currentTarget) setBillsExpandedModal(false); },
+                onPointerDown: (e) => e.stopPropagation(),
+                style: { position: "fixed", inset: 0, zIndex: 99995, background: "rgba(38,30,22,0.48)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }
+              },
+              h(
+                "div",
+                {
+                  onClick: (e) => e.stopPropagation(),
+                  style: { width: "100%", maxWidth: "352px", maxHeight: "82vh", overflowY: "auto", WebkitOverflowScrolling: "touch", background: "#FAF6EE", border: "1.5px solid #D4A03C", borderRadius: "18px", padding: "15px", boxShadow: "0 16px 40px rgba(38,30,22,0.28)", display: "flex", flexDirection: "column", gap: "10px", color: "#3E342B" }
+                },
+                h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" } },
+                  h("div", { style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "14px", fontWeight: 900, color: "#3E342B" } },
+                    WidgetSvg(h, "couple_bills", { size: 17, color: "#C84B31" }),
+                    h("span", null, `${coupleBillsMeta.charName} · 共同账本`)
+                  ),
+                  h("button", { type: "button", onClick: () => setBillsExpandedModal(false), style: { border: "none", background: "transparent", cursor: "pointer", padding: "4px" } }, WidgetSvg(h, "close", { size: 17, color: "#6B5A49" }))
+                ),
+                h("div", { style: { display: "flex", gap: "6px", background: "#EFE7D8", padding: "4px", borderRadius: "10px" } },
+                  [
+                    { id: "ta", label: `${coupleBillsMeta.charName}的账本 (${(data.taBills || []).length})` },
+                    { id: "user", label: `我的账本 (${(data.userBills || []).length})` }
+                  ].map((tb) =>
+                    h("button", {
+                      key: tb.id,
+                      type: "button",
+                      onClick: () => setBillsModalTab(tb.id),
+                      style: { flex: 1, border: "none", borderRadius: "7px", padding: "5px 4px", fontSize: "11px", fontWeight: 800, background: billsModalTab === tb.id ? "#C84B31" : "transparent", color: billsModalTab === tb.id ? "#FFFDF7" : "#5C4738", cursor: "pointer" }
+                    }, tb.label)
+                  )
+                ),
+                h("div", { style: { fontSize: "10.5px", color: "#8C7A68" } }, "桌面仅展示最新 5 笔；此处可展开全部历史账目与批注"),
+                h(
+                  "div",
+                  { style: { maxHeight: "42vh", overflowY: "auto", WebkitOverflowScrolling: "touch", background: "#FFFDF8", borderRadius: "12px", padding: "4px 10px", border: "1px solid #EAE0CE" } },
+                  modalList.length > 0
+                    ? modalList.map((b, idx) =>
+                        BillRowComp
+                          ? h(BillRowComp, { key: b.id || idx, bill: b, charName: coupleBillsMeta.charName, isTa: billsModalTab === "ta" })
+                          : h("div", { key: b.id || idx, style: { padding: "8px 0", borderBottom: "1px solid #F2ECE0", fontSize: "12px" } }, `${b.category} (${b.type === "income" ? "+" : "-"}¥${b.amount})`)
+                      )
+                    : h("div", { style: { padding: "22px 0", textAlign: "center", fontSize: "12px", color: "#8C7A68" } }, "暂无账目记录")
+                ),
+                h("div", { style: { display: "flex", gap: "8px" } },
+                  h("button", {
+                    type: "button",
+                    onClick: () => { setBillsExpandedModal(false); if (onQuickAction) onQuickAction("couple"); },
+                    style: { flex: 1, border: "none", borderRadius: "10px", background: "#C84B31", color: "#FFFDF7", padding: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }
+                  }, "前往情侣空间"),
+                  onOpenSettings &&
+                    h("button", {
+                      type: "button",
+                      onClick: () => { setBillsExpandedModal(false); onOpenSettings(widget.id); },
+                      style: { flex: 1, border: "1px solid #D5C5B0", borderRadius: "10px", background: "#FFF", color: "#4A3C31", padding: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }
+                    }, "更换账本/样式")
+                )
+              )
+            )
+          )
+      );
+    }
+
+    // 8. 心愿签（只展示用户或角色最新 1 条愿望，复刻名士语录签智能居中与智能换行排版）
+    if (widget.type === "couple_wish") {
+      const wish = coupleWishData && coupleWishData.wish ? coupleWishData.wish : null;
+      const creatorFilter = widget.config?.creatorFilter || "all";
+      const isUserWish = wish ? wish.creator === "user" : creatorFilter === "user";
+      const headerLabel = isUserWish ? "我的心愿" : `${coupleWishMeta.charName}的心愿`;
+      const wishTitle = wish ? String(wish.title || "").trim() : "";
+      const isShortWish = wishTitle.length <= 18;
+
+      const handleSendWishToChat = async () => {
+        const Bridge = global.CoupleWishBridge;
+        if (!Bridge || !wish || !coupleWishMeta.charId) return;
+        const res = await Bridge.sendWishCardToChat({
+          targetChar: { id: coupleWishMeta.charId, name: coupleWishMeta.charName },
+          wish
+        });
+        if (res && res.ok) {
+          setWishSentTip(`已静默送入「${coupleWishMeta.charName}」传讯主线`);
+          setTimeout(() => setWishSentTip(""), 2200);
+        }
+      };
+
+      return h(
+        React.Fragment,
+        null,
+        wrapCard(
+          wish
+            ? h(
+                "div",
+                {
+                  onClick: (e) => { e.stopPropagation(); setWishSentTip(""); setWishExpandedModal(true); },
+                  style: { display: "flex", flexDirection: "column", height: "100%", gap: isCompact2x1 ? "3px" : "6px", minHeight: 0 }
+                },
+                // 顶栏：头像/星愿标 + 归属 + 状态/分类角标
+                h(
+                  "div",
+                  { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "5px", flexShrink: 0 } },
+                  h(
+                    "div",
+                    { style: { display: "flex", alignItems: "center", gap: "5px", minWidth: 0 } },
+                    !isUserWish && coupleWishMeta.avatar
+                      ? h("img", { src: coupleWishMeta.avatar, alt: coupleWishMeta.charName, style: { width: isSquare ? "22px" : "18px", height: isSquare ? "22px" : "18px", borderRadius: "50%", objectFit: "cover", flexShrink: 0 } })
+                      : WidgetSvg(h, "couple_wish", { size: isSquare ? 15 : 13, color: skin.accent }),
+                    h("span", { style: { fontSize: isCompact2x1 ? "10.5px" : "11.5px", fontWeight: 800, color: skin.accent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, headerLabel)
+                  ),
+                  h(
+                    "span",
+                    {
+                      className: "hw-wish-tag",
+                      style: {
+                        fontSize: "9.5px",
+                        fontWeight: 700,
+                        color: wish.done ? "#5A8F6D" : skin.accent,
+                        opacity: 0.9,
+                        flexShrink: 0
+                      }
+                    },
+                    wish.done ? "已兑现" : (wish.category || "心愿")
+                  )
+                ),
+
+                // 中央正文区：100% 复刻名士语录签智能居中 + 智能换行防截断
+                h(
+                  "div",
+                  {
+                    className: "hw-wish-title no-scrollbar",
+                    style: {
+                      flex: 1,
+                      minHeight: 0,
+                      overflowY: "auto",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      textAlign: "center",
+                      padding: isSquare ? "4px 4px" : "1px 2px",
+                      fontSize: isSquare
+                        ? (isShortWish ? "14px" : "12.5px")
+                        : (isCompact2x1 ? (isShortWish ? "11.5px" : "10.5px") : "12px"),
+                      fontWeight: 700,
+                      lineHeight: isCompact2x1 ? 1.42 : 1.6,
+                      whiteSpace: "normal",
+                      wordBreak: "break-word"
+                    }
+                  },
+                  wishTitle
+                ),
+
+                // 2x2 底部日期与状态轻注
+                isSquare &&
+                  h(
+                    "div",
+                    { style: { fontSize: "10px", color: skin.subText, textAlign: "center", flexShrink: 0, borderTop: `1px dashed ${skin.border}`, paddingTop: "4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } },
+                    `${wish.date || "近日许下"} · ${wish.done ? "已实现" : "待与君共赴"}`
+                  )
+              )
+            : h(
+                "div",
+                {
+                  onClick: () => onQuickAction && onQuickAction("couple"),
+                  style: { height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "5px", textAlign: "center" }
+                },
+                WidgetSvg(h, "couple_wish", { size: isSquare ? 22 : 16, color: skin.accent }),
+                h("div", { style: { fontSize: "11.5px", fontWeight: 700, color: skin.text } }, "心愿签"),
+                h("div", { style: { fontSize: "10px", color: skin.subText } }, "点击前往情侣空间许愿")
+              )
+        ),
+        wishExpandedModal && wish &&
+          renderInPortal(
+            h(
+              "div",
+              {
+                onClick: (e) => { e.stopPropagation(); if (e.target === e.currentTarget) setWishExpandedModal(false); },
+                onPointerDown: (e) => e.stopPropagation(),
+                style: { position: "fixed", inset: 0, zIndex: 99995, background: "rgba(38,30,22,0.48)", display: "flex", alignItems: "center", justifyContent: "center", padding: "18px" }
+              },
+              h(
+                "div",
+                {
+                  onClick: (e) => e.stopPropagation(),
+                  style: { width: "100%", maxWidth: "332px", background: "#FAF6EE", border: "1.5px solid #D8B48A", borderRadius: "18px", padding: "16px", boxShadow: "0 16px 40px rgba(38,30,22,0.28)", display: "flex", flexDirection: "column", gap: "10px", color: "#3E342B" }
+                },
+                h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+                  h("div", { style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "14px", fontWeight: 900, color: "#B85D3B" } },
+                    WidgetSvg(h, "couple_wish", { size: 16, color: "#B85D3B" }),
+                    h("span", null, headerLabel)
+                  ),
+                  h("button", { type: "button", onClick: () => setWishExpandedModal(false), style: { border: "none", background: "transparent", cursor: "pointer", padding: "4px" } }, WidgetSvg(h, "close", { size: 17, color: "#6B5A49" }))
+                ),
+                h(
+                  "div",
+                  { style: { background: "#FFFDF8", borderRadius: "12px", border: "1px solid #EAE0CE", padding: "14px 12px", textAlign: "center", fontSize: "14px", fontWeight: 700, lineHeight: 1.7, color: "#3E342B", wordBreak: "break-word" } },
+                  wishTitle
+                ),
+                h("div", { style: { display: "flex", justifyContent: "space-between", fontSize: "11.5px", color: "#8C7A68" } },
+                  h("span", null, `${wish.category || "心之所向"} · ${wish.date || ""}`),
+                  h("span", { style: { color: wish.done ? "#5A8F6D" : "#B85D3B", fontWeight: 700 } }, wish.done ? "已兑现" : "待兑现")
+                ),
+                wishSentTip &&
+                  h("div", { style: { fontSize: "11.5px", color: "#4E7D5B", background: "#EEF6F0", borderRadius: "8px", padding: "6px 9px", textAlign: "center", fontWeight: 700 } }, wishSentTip),
+                coupleWishMeta.charId &&
+                  h("button", {
+                    type: "button",
+                    onClick: handleSendWishToChat,
+                    style: { border: "none", borderRadius: "10px", background: "#4A3C31", color: "#FFFDF7", padding: "8.5px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }
+                  }, `递送心愿信笺给${coupleWishMeta.charName}（传讯）`),
+                h("div", { style: { display: "flex", gap: "8px" } },
+                  h("button", {
+                    type: "button",
+                    onClick: () => { setWishExpandedModal(false); if (onQuickAction) onQuickAction("couple"); },
+                    style: { flex: 1, border: "none", borderRadius: "10px", background: "#C84B31", color: "#FFFDF7", padding: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }
+                  }, "前往情侣空间"),
+                  onOpenSettings &&
+                    h("button", {
+                      type: "button",
+                      onClick: () => { setWishExpandedModal(false); onOpenSettings(widget.id); },
+                      style: { flex: 1, border: "1px solid #D5C5B0", borderRadius: "10px", background: "#FFF", color: "#4A3C31", padding: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }
+                    }, "更换来源/样式")
+                )
+              )
+            )
+          )
+      );
+    }
+
+    // 9. 日程便签（读取日历-未竟之事，支持筛选用户/指定角色，智能换行防截断，点击跳转日历页）
     const tasks = calendarTasks;
     return wrapCard(
       h("div", { style: { display: "flex", flexDirection: "column", height: "100%", gap: "5px", minHeight: 0 } },
@@ -1225,6 +1942,8 @@
     const [expandedAddCssType, setExpandedAddCssType] = useState("");
     const [expandedSelectedCss, setExpandedSelectedCss] = useState(false);
     const [characters, setCharacters] = useState([]);
+    const [chenweiRecords, setChenweiRecords] = useState([]);
+    const [chenweiCharProps, setChenweiCharProps] = useState({});
     const [toast, setToast] = useState("");
     const photoInputRef = useRef(null);
     const cssImportInputRef = useRef(null);
@@ -1264,6 +1983,16 @@
       if (global.chatCharacterStore && typeof global.chatCharacterStore.getAll === "function") {
         global.chatCharacterStore.getAll().then((list) => {
           if (alive) setCharacters((list || []).filter((c) => c && c.id && c.name && !String(c.id).startsWith("group") && c.type !== "group" && c.type !== "decor"));
+        }).catch(() => {});
+      }
+      if (global.ChenweiAiOracle) {
+        Promise.all([
+          global.ChenweiAiOracle.loadOracleRecords ? global.ChenweiAiOracle.loadOracleRecords(30) : Promise.resolve([]),
+          global.ChenweiAiOracle.loadAllCharProphecies ? global.ChenweiAiOracle.loadAllCharProphecies() : Promise.resolve({})
+        ]).then(([recs, cProps]) => {
+          if (!alive) return;
+          setChenweiRecords(Array.isArray(recs) ? recs : []);
+          setChenweiCharProps(cProps && typeof cProps === "object" ? cProps : {});
         }).catch(() => {});
       }
       return () => { alive = false; };
@@ -1514,7 +2243,32 @@
               type: "button",
               onClick: () => handleTriggerCssImport(widgetType, onChangeCss),
               style: { border: "1px solid #C5CEB8", background: "#F4F7EE", color: "#3A4233", borderRadius: "7px", padding: "4px 8px", fontSize: "10.5px", fontWeight: 700, display: "flex", alignItems: "center", gap: "3px", cursor: "pointer" }
-            }, WidgetSvg(h, "upload", { size: 12, color: "#5A6252" }), "导入 CSS")
+            }, WidgetSvg(h, "upload", { size: 12, color: "#5A6252" }), "导入 CSS"),
+            h("button", {
+              type: "button",
+              onClick: () => {
+                const content = String(cssValue || "").trim();
+                if (!content) {
+                  showToast("当前 CSS 为空，可先套用预设或填写样式");
+                  return;
+                }
+                try {
+                  const blob = new Blob([content], { type: "text/css;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `小组件-${(meta && meta.label) || widgetType}.css`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  setTimeout(() => URL.revokeObjectURL(url), 1000);
+                  showToast("已导出小组件 CSS 文件");
+                } catch (_) {
+                  showToast("导出失败，请尝试手动复制");
+                }
+              },
+              style: { border: "1px solid #C5CEB8", background: "#F4F7EE", color: "#3A4233", borderRadius: "7px", padding: "4px 8px", fontSize: "10.5px", fontWeight: 700, display: "flex", alignItems: "center", gap: "3px", cursor: "pointer" }
+            }, h("svg", { width: 12, height: 12, viewBox: "0 0 24 24", fill: "none", stroke: "#5A6252", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" }, h("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }), h("polyline", { points: "7 10 12 15 17 10" }), h("line", { x1: 12, y1: 15, x2: 12, y2: 3 })), "导出 CSS")
           ),
           h("div", { style: { display: "flex", gap: "5px" } },
             h("button", {
@@ -2044,6 +2798,142 @@
                       placeholder: "可选：填写底部手写小字…",
                       style: { border: "1px solid #E2DFD5", borderRadius: "10px", padding: "8px 10px", fontSize: "12.5px", outline: "none" }
                     })
+                  );
+                })(),
+              // 谶纬签匣专属设置（切换我的历史卦签 / 名士专属签 + 默认体裁）
+              selectedWidget.type === "chenwei_oracle" &&
+                (() => {
+                  const curMode = selectedWidget.config?.sourceMode === "char_prophecy" ? "char_prophecy" : "my_oracle";
+                  const curForm = selectedWidget.config?.verseForm || "poem";
+                  const savedCharPropList = Object.values(chenweiCharProps || {});
+                  return h(
+                    "div",
+                    { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+                    h("div", { style: { fontSize: "11.5px", color: "#7A826E" } }, "卦签展示来源"),
+                    h("div", { style: { display: "flex", gap: "6px" } },
+                      [
+                        { id: "my_oracle", lbl: "我的历史卦签" },
+                        { id: "char_prophecy", lbl: "名士的专属签" }
+                      ].map((m) =>
+                        h("button", {
+                          key: m.id,
+                          type: "button",
+                          onClick: () => handlePatchSelected({ config: { sourceMode: m.id } }),
+                          style: { flex: 1, border: curMode === m.id ? "1.5px solid #6D735B" : "1px solid #E2DFD5", background: curMode === m.id ? "#EEF2E6" : "#FAF9F5", color: "#3A4233", borderRadius: "9px", padding: "7px 4px", fontSize: "11.5px", fontWeight: 700, cursor: "pointer" }
+                        }, m.lbl)
+                      )
+                    ),
+                    curMode === "my_oracle"
+                      ? h(
+                          "select",
+                          {
+                            value: selectedWidget.config?.recordId || "",
+                            onChange: (e) => handlePatchSelected({ config: { recordId: e.target.value } }),
+                            style: { border: "1px solid #E2DFD5", borderRadius: "10px", padding: "8px 10px", fontSize: "12.5px", background: "#FAF9F5" }
+                          },
+                          h("option", { value: "" }, "自动展示最新解过的一签"),
+                          chenweiRecords.map((r) =>
+                            h("option", { key: r.id, value: String(r.id) }, `${r.hexagram || "卦签"} · ${String(r.question || "").slice(0, 16)}`)
+                          )
+                        )
+                      : h(
+                          "select",
+                          {
+                            value: selectedWidget.config?.charId || "",
+                            onChange: (e) => handlePatchSelected({ config: { charId: e.target.value } }),
+                            style: { border: "1px solid #E2DFD5", borderRadius: "10px", padding: "8px 10px", fontSize: "12.5px", background: "#FAF9F5" }
+                          },
+                          savedCharPropList.length === 0
+                            ? h("option", { value: "" }, "暂未探查名士谶纬（请先去小摊查看名士）")
+                            : savedCharPropList.map((p) =>
+                                h("option", { key: p.charId, value: String(p.charId) }, `${p.charName} · ${p.buildTitle || p.hexagram}`)
+                              )
+                        ),
+                    h("div", { style: { fontSize: "11.5px", color: "#7A826E" } }, "桌面默认展示体裁（桌面卡片上也可随时轻点切换）"),
+                    h("div", { style: { display: "flex", gap: "6px" } },
+                      [
+                        { id: "poem", lbl: "古诗签" },
+                        { id: "ballad", lbl: "东汉童谣" },
+                        { id: "chenyu", lbl: "图谶秘语" }
+                      ].map((fm) =>
+                        h("button", {
+                          key: fm.id,
+                          type: "button",
+                          onClick: () => handlePatchSelected({ config: { verseForm: fm.id } }),
+                          style: { flex: 1, border: curForm === fm.id ? "1.5px solid #6D735B" : "1px solid #E2DFD5", background: curForm === fm.id ? "#EEF2E6" : "#FAF9F5", color: "#3A4233", borderRadius: "9px", padding: "6px 4px", fontSize: "11px", fontWeight: 700, cursor: "pointer" }
+                        }, fm.lbl)
+                      )
+                    )
+                  );
+                })(),
+              // 共同账本专属设置（绑定名士 + 账本视角；桌面固定展示最新 5 条）
+              selectedWidget.type === "couple_bills" &&
+                (() => {
+                  const curTab = selectedWidget.config?.ledgerTab || "ta";
+                  return h(
+                    "div",
+                    { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+                    h("div", { style: { fontSize: "11.5px", color: "#7A826E" } }, "绑定账本名士（桌面自动展示最新 5 笔收支）"),
+                    h(
+                      "select",
+                      {
+                        value: selectedWidget.config?.charId || "",
+                        onChange: (e) => handlePatchSelected({ config: { charId: e.target.value } }),
+                        style: { border: "1px solid #E2DFD5", borderRadius: "10px", padding: "8px 10px", fontSize: "12.5px", background: "#FAF9F5" }
+                      },
+                      h("option", { value: "" }, "自动跟随当前情侣空间伴侣"),
+                      characters.map((c) => h("option", { key: c.id, value: String(c.id) }, `${c.name} 的账本`))
+                    ),
+                    h("div", { style: { fontSize: "11.5px", color: "#7A826E" } }, "展示账本视角"),
+                    h("div", { style: { display: "flex", gap: "6px" } },
+                      [
+                        { id: "ta", lbl: "TA 的账本" },
+                        { id: "user", lbl: "我的账本" },
+                        { id: "both", lbl: "双方合并" }
+                      ].map((tb) =>
+                        h("button", {
+                          key: tb.id,
+                          type: "button",
+                          onClick: () => handlePatchSelected({ config: { ledgerTab: tb.id } }),
+                          style: { flex: 1, border: curTab === tb.id ? "1.5px solid #6D735B" : "1px solid #E2DFD5", background: curTab === tb.id ? "#EEF2E6" : "#FAF9F5", color: "#3A4233", borderRadius: "9px", padding: "6px 4px", fontSize: "11px", fontWeight: 700, cursor: "pointer" }
+                        }, tb.lbl)
+                      )
+                    )
+                  );
+                })(),
+              // 心愿签专属设置（绑定名士 + 许愿人筛选，只展示最新 1 条）
+              selectedWidget.type === "couple_wish" &&
+                (() => {
+                  const curFilter = selectedWidget.config?.creatorFilter || "all";
+                  return h(
+                    "div",
+                    { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+                    h("div", { style: { fontSize: "11.5px", color: "#7A826E" } }, "绑定愿望清单名士（桌面只展示最新 1 条）"),
+                    h(
+                      "select",
+                      {
+                        value: selectedWidget.config?.charId || "",
+                        onChange: (e) => handlePatchSelected({ config: { charId: e.target.value } }),
+                        style: { border: "1px solid #E2DFD5", borderRadius: "10px", padding: "8px 10px", fontSize: "12.5px", background: "#FAF9F5" }
+                      },
+                      h("option", { value: "" }, "自动跟随当前情侣空间伴侣"),
+                      characters.map((c) => h("option", { key: c.id, value: String(c.id) }, `${c.name} 的愿望清单`))
+                    ),
+                    h("div", { style: { fontSize: "11.5px", color: "#7A826E" } }, "展示许愿人（优先展示未实现心愿）"),
+                    h("div", { style: { display: "flex", gap: "6px" } },
+                      [
+                        { id: "user", lbl: "我的最新一条" },
+                        { id: "ta", lbl: "TA 的最新一条" },
+                        { id: "all", lbl: "不限最新" }
+                      ].map((f) =>
+                        h("button", {
+                          key: f.id,
+                          type: "button",
+                          onClick: () => handlePatchSelected({ config: { creatorFilter: f.id } }),
+                          style: { flex: 1, border: curFilter === f.id ? "1.5px solid #6D735B" : "1px solid #E2DFD5", background: curFilter === f.id ? "#EEF2E6" : "#FAF9F5", color: "#3A4233", borderRadius: "9px", padding: "6px 4px", fontSize: "11px", fontWeight: 700, cursor: "pointer" }
+                        }, f.lbl)
+                      )
+                    )
                   );
                 })(),
               // 日程便签专属设置（筛选用户或指定角色的日历-未竟之事）

@@ -16,6 +16,13 @@
   const AI_TIMEOUT_MS = 90000;
   const MIN_CHAT_HISTORY_COUNT = 36; // 确保拉取至少 30 条近期传讯上下文
 
+  // 东汉三大正统谶纬体裁（单次起卦一并输出，弹窗内三键切换阅览）
+  const ORACLE_FORMS = [
+    { id: "poem",   label: "古诗签",   seal: "诗签", subtitle: "四言/五言/七言绝句 · 观象寄情" },
+    { id: "ballad", label: "东汉童谣", seal: "童谣", subtitle: "巷陌歌谣 · 三言/三三七言隐喻" },
+    { id: "chenyu", label: "图谶秘语", seal: "图谶", subtitle: "河图纬书 · 拆字象数断语" }
+  ];
+
   // ==========================================
   // 1. 独立 IndexedDB 卷宗与名士谶纬缓存
   // ==========================================
@@ -47,18 +54,27 @@
     return _dbPromise;
   }
 
+  function notifyChenweiUpdated() {
+    try {
+      if (typeof global.dispatchEvent === "function") {
+        global.dispatchEvent(new CustomEvent("chenwei_oracle_updated", { detail: { at: Date.now() } }));
+      }
+    } catch (e) {}
+  }
+
   async function saveOracleRecord(rec) {
     const item = { id: rec.id || `cw_${Date.now()}`, ...rec, savedAt: Date.now() };
     const db = await openDb();
     if (!db) {
       _memOracle = [item, ..._memOracle.slice(0, 29)];
+      notifyChenweiUpdated();
       return item;
     }
     return new Promise((resolve) => {
       try {
         const tx = db.transaction(STORE_ORACLE, "readwrite");
         tx.objectStore(STORE_ORACLE).put(item);
-        tx.oncomplete = () => resolve(item);
+        tx.oncomplete = () => { notifyChenweiUpdated(); resolve(item); };
         tx.onerror = () => resolve(item);
       } catch (e) { resolve(item); }
     });
@@ -81,19 +97,58 @@
     });
   }
 
+  async function getOracleRecordById(recordId) {
+    const rid = String(recordId || "");
+    if (!rid) return null;
+    const db = await openDb();
+    if (!db) return _memOracle.find((r) => String(r.id) === rid) || null;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(STORE_ORACLE, "readonly");
+        const req = tx.objectStore(STORE_ORACLE).get(rid);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      } catch (e) { resolve(null); }
+    });
+  }
+
+  async function updateOracleRecord(recordId, updater) {
+    const rid = String(recordId || "");
+    if (!rid || typeof updater !== "function") return null;
+    const existing = await getOracleRecordById(rid);
+    if (!existing) return null;
+    const next = { ...existing, ...(updater(existing) || {}), id: rid, updatedAt: Date.now() };
+    const db = await openDb();
+    if (!db) {
+      const idx = _memOracle.findIndex((r) => String(r.id) === rid);
+      if (idx >= 0) _memOracle[idx] = next;
+      else _memOracle = [next, ..._memOracle.slice(0, 29)];
+      return next;
+    }
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(STORE_ORACLE, "readwrite");
+        tx.objectStore(STORE_ORACLE).put(next);
+        tx.oncomplete = () => resolve(next);
+        tx.onerror = () => resolve(next);
+      } catch (e) { resolve(next); }
+    });
+  }
+
   async function saveCharProphecy(charId, data) {
     const cid = String(charId);
     const item = { charId: cid, ...data, savedAt: Date.now() };
     const db = await openDb();
     if (!db) {
       _memCharMap.set(cid, item);
+      notifyChenweiUpdated();
       return item;
     }
     return new Promise((resolve) => {
       try {
         const tx = db.transaction(STORE_CHAR_PROPHECY, "readwrite");
         tx.objectStore(STORE_CHAR_PROPHECY).put(item);
-        tx.oncomplete = () => resolve(item);
+        tx.oncomplete = () => { notifyChenweiUpdated(); resolve(item); };
         tx.onerror = () => resolve(item);
       } catch (e) { resolve(item); }
     });
@@ -429,23 +484,79 @@
   }
 
   // ==========================================
-  // 5. 玩家积木起卦解签
+  // 5. 东汉三体裁（古诗签 + 东汉童谣 + 图谶秘语）兜底生成器 & 玩家积木起卦
   // ==========================================
+  function buildOfflineTriVerses(analysis = {}, qText = "") {
+    const elem = analysis.dominantElement || "火";
+    const arch = analysis.archetype || "筑台问天";
+    const count = Number(analysis.brickCount || 6);
+    const elemMap = {
+      "火": {
+        poem: `赤焰登台照夜阑，\n${arch}气象入云端。\n莫道风云多诡谲，\n守心落子自安然。`,
+        ballad: `城南火，照高台，\n三尺砖，九重开。\n朱雀飞过广陵陌，\n笑看风起故人来。`,
+        chenyu: `赤雀衔书，炎精上腾；\n双火成炎，三日见明；\n动静失衡则灼，守中而行大吉。`,
+        chenyuGloss: `【象数拆解】主气归「火」，砖石共${count}枚成「${arch}」之势，利明谋、忌躁进。`
+      },
+      "木": {
+        poem: `青枝叠玉应星躔，\n松柏生风气象全。\n静待春雷惊蛰处，\n旧盟新约两相牵。`,
+        ballad: `青青草，绕石阶，\n东边枝，西边栽。\n莫问枯荣谁作主，\n风吹一夜百花开。`,
+        chenyu: `青龙吐气，木生于坎；\n十口相传，生机暗藏；\n曲直有度，久谋必成。`,
+        chenyuGloss: `【象数拆解】主气归「木」，${count}石相衔如林木滋长，宜徐图缓进、广结善缘。`
+      },
+      "水": {
+        poem: `寒潭映月玉阶清，\n叠石藏锋暗浪平。\n莫笑潜龙犹未跃，\n一朝雷动九川鸣。`,
+        ballad: `黑水水，流石桥，\n桥头雾，桥尾潮。\n船家不言前路险，\n半夜听桨过江皋。`,
+        chenyu: `玄武伏波，坎水润下；\n三点成川，隐字藏锋；\n明退暗进，利在幽微。`,
+        chenyuGloss: `【象数拆解】主气归「水」，象主深谋秘计，表面波澜不惊，实则暗流已转。`
+      },
+      "金": {
+        poem: `白玉为台剑气寒，\n规矩方圆自可观。\n若问前程谁主断，\n一诺千金石不刊。`,
+        ballad: `白石砌，铜铃响，\n直如弦，莫相仿。\n西风吹断阶前叶，\n留得金印在君掌。`,
+        chenyu: `白虎司权，兑金凝肃；\n一刀断葛，刚克柔从；\n决断莫迟，迟则生变。`,
+        chenyuGloss: `【象数拆解】主气归「金」，${arch}筋骨分明，所问「${String(qText || "前程").slice(0, 10)}」宜当机立断。`
+      },
+      "土": {
+        poem: `厚土承天四柱安，\n重台叠影耐风寒。\n纵有浮云遮望眼，\n根深不动万山宽。`,
+        ballad: `黄土厚，筑高墙，\n墙内暖，墙外凉。\n莫怨行人归步晚，\n灯火原在自家堂。`,
+        chenyu: `黄龙镇中，坤厚载物；\n四隅既固，外邪难侵；\n守成待时，终得其位。`,
+        chenyuGloss: `【象数拆解】主气归「土」，重心稳固，凡事以守为攻，静候对方先露破绽。`
+      }
+    };
+    return elemMap[elem] || elemMap["火"];
+  }
+
+  function normalizeTriVerses(parsed, fallbackVerses) {
+    const vObj = (parsed && parsed.verses && typeof parsed.verses === "object") ? parsed.verses : {};
+    const poem = String(vObj.poem || parsed?.oracleVerse || fallbackVerses.poem).trim();
+    const ballad = String(vObj.ballad || parsed?.balladVerse || fallbackVerses.ballad).trim();
+    const chenyu = String(vObj.chenyu || parsed?.chenyuVerse || fallbackVerses.chenyu).trim();
+    const chenyuGloss = String(parsed?.chenyuGloss || vObj.chenyuGloss || fallbackVerses.chenyuGloss).trim();
+    return {
+      verses: { poem, ballad, chenyu },
+      chenyuGloss,
+      oracleVerse: poem
+    };
+  }
+
   async function requestPlayerDivination({ question = "", bricks = [], commentatorChar = null } = {}) {
     const Bricks = global.ChenweiLegoBricks;
-    const analysis = Bricks ? Bricks.analyzeStructure(bricks) : { summaryText: "坛上已落积木。", dominantElement: "火", archetype: "筑台问天" };
+    const analysis = Bricks ? Bricks.analyzeStructure(bricks) : { summaryText: "坛上已落积木。", dominantElement: "火", archetype: "筑台问天", brickCount: bricks.length };
     const ctx = await collectCharacter5DContext(commentatorChar);
     const qText = String(question || "").trim() || "近日气运与心中所系之事";
+    const offlineVerses = buildOfflineTriVerses(analysis, qText);
 
     const sysPrompt = [
-      "你是东汉末年「谶纬小摊」的司天监掌卦先生，精通五行谶纬与器物观象。",
+      "你是东汉末年「谶纬小摊」的司天监掌卦先生，精通五行谶纬、器物观象与东汉三大正统签体。",
       ctx.userPersona.name ? `【问卦人身份】${ctx.userPersona.name}（${ctx.userPersona.identity || "广陵王"}）${ctx.userPersona.background ? `：${ctx.userPersona.background}` : ""}` : "",
       ctx.worldBookText ? `【世界观设定】${ctx.worldBookText}` : "",
       ctx.charProfile ? `【同行点评名士】${ctx.charProfile.name}（MBTI:${ctx.charProfile.mbti}，星座:${ctx.charProfile.constellation}，语风:${ctx.charProfile.speakingStyle}，性格:${ctx.charProfile.personality}）` : "",
       ctx.recentChat.text ? `【该名士与问卦人近期传讯】\n${ctx.recentChat.text}` : "",
-      "请严格结合问卦人亲手拼搭的「3D 乐高积木量化格局」，给出极具代入感与古风韵味的谶纬解签。",
-      "只返回严格 JSON：",
-      "{\"hexagram\":\"卦名 · 吉凶（如：风火家人 · 上吉）\",\"oracleVerse\":\"四句古风签文（用\\n换行）\",\"structureReading\":\"80~130字结合积木层高、对称度、五行色泽与灵物的象意解读\",\"advice\":\"50~90字切实温柔的行事建言\",\"charComment\":\"若指定了同行名士，以该名士第一人称口吻写40~80字点评，否则为空字符串\"}"
+      "请严格结合问卦人亲手拼搭的「3D 乐高积木量化格局」与所问之事，一次性同时输出东汉三种正统体裁的卦文：",
+      "1. poem（古诗签）：四句古风签诗（五言或七言绝句，用\\n换行），典雅含蓄；",
+      "2. ballad（东汉童谣）：仿《后汉书·五行志》体例（如「千里草，何青青；十日卜，不得生」「直如弦，死道边；曲如钩，反封侯」），用三言/三三七言、顶真叠字、市井白描隐喻时局与人心（4~6短句，用\\n换行），自带东汉街头童谣的诡谲宿命感；",
+      "3. chenyu（图谶秘语）：仿《河图》《洛书》《春秋纬》东汉图谶体，使用拆字隐语、干支星象与四字断语（3~4句，用\\n换行），古奥神秘，并配一句 chenyuGloss（30~55字）点破拆字或象数玄机。",
+      "只返回严格 JSON，不要额外解释：",
+      "{\"hexagram\":\"卦名 · 吉凶（如：风火家人 · 上吉）\",\"verses\":{\"poem\":\"四句古诗签（\\n换行）\",\"ballad\":\"东汉童谣（\\n换行）\",\"chenyu\":\"图谶秘语（\\n换行）\"},\"chenyuGloss\":\"30~55字拆字/象数注脚\",\"structureReading\":\"80~130字结合积木层高、对称度、五行色泽与灵物的象意解读\",\"advice\":\"50~90字切实温柔的行事建言\",\"charComment\":\"若指定了同行名士，以该名士第一人称口吻写40~80字点评，否则为空字符串\"}"
     ].filter(Boolean).join("\n");
 
     const userPrompt = `【所问之事】${qText}\n【积木实体格局】${analysis.summaryText}`;
@@ -454,41 +565,54 @@
       const raw = await callOracleLLM([
         { role: "system", content: sysPrompt },
         { role: "user", content: userPrompt }
-      ], 680);
+      ], 920);
       const parsed = extractJsonObject(raw);
       if (parsed && parsed.hexagram) {
+        const tri = normalizeTriVerses(parsed, offlineVerses);
         const result = {
+          id: `cw_${Date.now()}`,
           question: qText,
           hexagram: String(parsed.hexagram).trim(),
-          oracleVerse: String(parsed.oracleVerse || "").trim(),
+          oracleVerse: tri.oracleVerse,
+          verses: tri.verses,
+          chenyuGloss: tri.chenyuGloss,
           structureReading: String(parsed.structureReading || "").trim(),
           advice: String(parsed.advice || "").trim(),
           charComment: String(parsed.charComment || "").trim(),
           commentatorName: ctx.charProfile ? ctx.charProfile.name : "",
+          interpretations: {},
           analysis,
           bricks,
           usedAi: true
         };
-        await saveOracleRecord(result);
-        return result;
+        const saved = await saveOracleRecord(result);
+        return saved;
       }
     } catch (e) {}
 
-    // 离线古风兜底
+    // 离线古风三体裁兜底
     const fallback = {
+      id: `cw_${Date.now()}`,
       question: qText,
       hexagram: `${analysis.dominantElement}曜${analysis.archetype} · 中上吉`,
-      oracleVerse: `重台叠玉应星躔，\n${analysis.dominantElement}德相生气象全。\n莫道风云多诡谲，\n守心落子自安然。`,
+      oracleVerse: offlineVerses.poem,
+      verses: {
+        poem: offlineVerses.poem,
+        ballad: offlineVerses.ballad,
+        chenyu: offlineVerses.chenyu
+      },
+      chenyuGloss: offlineVerses.chenyuGloss,
       structureReading: `${analysis.summaryText} 观此积木之象，${analysis.stabilityHint}，主气归于「${analysis.dominantElement}」，所问之事虽有微澜，然根基已成，顺势而为必见回响。`,
       advice: "宜先固眼前根基，忌急躁冒进；三日内若有旧人讯息或新机上门，可从容应之。",
       charComment: ctx.charProfile ? `（${ctx.charProfile.name}端详片刻）这般搭法倒有几分你的性子，放心去做便是。` : "",
       commentatorName: ctx.charProfile ? ctx.charProfile.name : "",
+      interpretations: {},
       analysis,
       bricks,
       usedAi: false
     };
-    await saveOracleRecord(fallback);
-    return fallback;
+    const savedFallback = await saveOracleRecord(fallback);
+    return savedFallback;
   }
 
   // ==========================================
@@ -520,7 +644,7 @@
       `- 可选配色 primaryColor / accentColor（必选其一）：${colorIds}`,
       `- customBricks 为额外点缀的 4~8 块积木，每块格式 {"type":"零件ID","gx":-4到3整数,"gz":-4到3整数,"rot":0或90,"color":"颜色ID"}，可用零件ID：${partIds}`,
       "只返回严格 JSON，不要额外解释：",
-      "{\"question\":\"名士心中暗问之事（15~36字）\",\"buildTitle\":\"作品雅名（4~8字）\",\"baseArchetype\":\"pavilion\",\"primaryColor\":\"cinnabar\",\"accentColor\":\"gold\",\"customBricks\":[{\"type\":\"orb_1x1\",\"gx\":0,\"gz\":0,\"rot\":0,\"color\":\"gold\"}],\"hexagram\":\"卦名 · 吉凶\",\"oracleVerse\":\"四句古风签文（用\\n换行）\",\"charNote\":\"120~200字名士第一人称手札，贴合口癖解释自己为何搭这座积木，并自然流露对玩家的挂念\"}"
+      "{\"question\":\"名士心中暗问之事（15~36字）\",\"buildTitle\":\"作品雅名（4~8字）\",\"baseArchetype\":\"pavilion\",\"primaryColor\":\"cinnabar\",\"accentColor\":\"gold\",\"customBricks\":[{\"type\":\"orb_1x1\",\"gx\":0,\"gz\":0,\"rot\":0,\"color\":\"gold\"}],\"hexagram\":\"卦名 · 吉凶\",\"verses\":{\"poem\":\"四句古诗签（\\n换行）\",\"ballad\":\"仿东汉童谣（三言/三三七言隐喻，\\n换行）\",\"chenyu\":\"东汉图谶秘语（拆字/象数断语，\\n换行）\"},\"chenyuGloss\":\"25~45字拆字或象数注脚\",\"charNote\":\"120~200字名士第一人称手札，贴合口癖解释自己为何搭这座积木，并自然流露对玩家的挂念\"}"
     ].filter(Boolean).join("\n");
 
     const userPrompt = `请以「${cp.name}」的视角完成本次谶纬积木搭建与手札，务必体现近期传讯中的互动心境。`;
@@ -529,18 +653,22 @@
       const raw = await callOracleLLM([
         { role: "system", content: sysPrompt },
         { role: "user", content: userPrompt }
-      ], 820);
+      ], 980);
       const parsed = extractJsonObject(raw);
       if (parsed && (parsed.buildTitle || parsed.charNote)) {
         const bricks = Bricks ? Bricks.sanitizeAndGroundBlueprint(parsed) : [];
         const analysis = Bricks ? Bricks.analyzeStructure(bricks) : null;
+        const offlineTri = buildOfflineTriVerses(analysis || {}, parsed.question || "");
+        const tri = normalizeTriVerses(parsed, offlineTri);
         const result = {
           charId: cp.id,
           charName: cp.name,
           question: String(parsed.question || "问前路风云与眼前人安康").trim(),
           buildTitle: String(parsed.buildTitle || `${cp.name}的灵台`).trim(),
           hexagram: String(parsed.hexagram || "紫微照命 · 中上吉").trim(),
-          oracleVerse: String(parsed.oracleVerse || "星移斗转意难平，\n独上高楼听风声。\n幸有灵台明月在，\n寸心千里共长明。").trim(),
+          oracleVerse: tri.oracleVerse,
+          verses: tri.verses,
+          chenyuGloss: tri.chenyuGloss,
           charNote: String(parsed.charNote || "").trim(),
           bricks,
           analysis,
@@ -557,16 +685,24 @@
     const fallbackArch = mbti.includes("N") ? "tower" : mbti.includes("F") ? "garden" : mbti.includes("J") ? "gate" : "pavilion";
     const fallbackPrimary = mbti.includes("I") ? "azure" : mbti.includes("T") ? "ink" : "cinnabar";
     const fallbackBricks = Bricks ? Bricks.sanitizeAndGroundBlueprint({ baseArchetype: fallbackArch, primaryColor: fallbackPrimary, accentColor: "gold" }) : [];
+    const fallbackAnalysis = Bricks ? Bricks.analyzeStructure(fallbackBricks) : null;
+    const fallbackTri = buildOfflineTriVerses(fallbackAnalysis || {}, `暗问近日局势与${ctx.userPersona.name}安否`);
     const fallback = {
       charId: cp.id,
       charName: cp.name,
       question: `暗问近日局势与${ctx.userPersona.name}安否`,
       buildTitle: `${cp.name} · 观星灵台`,
       hexagram: "天风姤 · 中吉",
-      oracleVerse: "星落寒阶夜未央，\n垒石为台候晓光。\n纵使前尘多变数，\n此心终不负韶光。",
+      oracleVerse: fallbackTri.poem,
+      verses: {
+        poem: fallbackTri.poem,
+        ballad: fallbackTri.ballad,
+        chenyu: fallbackTri.chenyu
+      },
+      chenyuGloss: fallbackTri.chenyuGloss,
       charNote: `闲来无事，便在谶纬小摊随手垒了这座小台。近来与${ctx.userPersona.name}几番往来，心中所系终究逃不过安稳二字。这几块砖石看着虽小，倒也算替眼下局势定个心气。`,
       bricks: fallbackBricks,
-      analysis: Bricks ? Bricks.analyzeStructure(fallbackBricks) : null,
+      analysis: fallbackAnalysis,
       chatContextCount: ctx.recentChat.count,
       usedAi: false
     };
@@ -578,13 +714,19 @@
     DB_NAME,
     AI_TIMEOUT_MS,
     MIN_CHAT_HISTORY_COUNT,
+    ORACLE_FORMS,
     saveOracleRecord,
     loadOracleRecords,
+    getOracleRecordById,
+    updateOracleRecord,
     saveCharProphecy,
     loadAllCharProphecies,
     resolveCharAvatarUrl,
     loadAllCharacters,
     collectCharacter5DContext,
+    callOracleLLM,
+    extractJsonObject,
+    buildOfflineTriVerses,
     requestPlayerDivination,
     requestCharacterProphecy
   };

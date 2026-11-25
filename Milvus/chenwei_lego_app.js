@@ -113,6 +113,16 @@
           h("path", { d: "M12 11v5.5" }),
           h("circle", { cx: 12, cy: 7.8, r: 0.8, fill: color })
         );
+      case "eye":
+        return h("svg", common,
+          h("path", { d: "M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" }),
+          h("circle", { cx: 12, cy: 12, r: 2.8 })
+        );
+      case "send":
+        return h("svg", common,
+          h("path", { d: "M21 3L10 14" }),
+          h("path", { d: "M21 3l-7 18-4-7-7-4 18-7z" })
+        );
       default:
         return h("svg", common, h("circle", { cx: 12, cy: 12, r: 6 }));
     }
@@ -237,11 +247,21 @@
     const [viewingCharProphecy, setViewingCharProphecy] = useState(null);
     const [prophecyCardExpanded, setProphecyCardExpanded] = useState(true);
 
-    // 问卦与解签
+    // 问卦与解签（三体裁切换 + 指定名士解签博弈 + 多轮追问）
     const [question, setQuestion] = useState("");
     const [isDivining, setIsDivining] = useState(false);
     const [oracleResult, setOracleResult] = useState(null);
+    const [activeVerseForm, setActiveVerseForm] = useState("poem"); // "poem" | "ballad" | "chenyu"
+    const [prophecyVerseForm, setProphecyVerseForm] = useState("poem");
     const [commentatorCharId, setCommentatorCharId] = useState("");
+    const [selectedInterpCharId, setSelectedInterpCharId] = useState("");
+    const [interpretingCharId, setInterpretingCharId] = useState("");
+    const [followUpInput, setFollowUpInput] = useState("");
+    const [sendingFollowUp, setSendingFollowUp] = useState(false);
+    const [revealedMotiveMap, setRevealedMotiveMap] = useState({});
+    const [shareModalPayload, setShareModalPayload] = useState(null);
+    const [shareNoteInput, setShareNoteInput] = useState("");
+    const [sharingCharId, setSharingCharId] = useState("");
 
     // 名士列表、头像缓存、名士谶纬缓存、历史卷宗
     const [characters, setCharacters] = useState([]);
@@ -254,19 +274,25 @@
     const canvasMountRef = useRef(null);
     const sceneApiRef = useRef(null);
     const bricksRef = useRef(bricks);
-    const toolStateRef = useRef({ selectedType, selectedColor, selectedRot, toolMode, viewing: false });
+    const toolStateRef = useRef({ selectedType, selectedColor, selectedRot, toolMode, viewing: false, uiBlocked: false });
     const animTimerRef = useRef(null);
+    const interpReqSeqRef = useRef(0);
 
     useEffect(() => { bricksRef.current = bricks; }, [bricks]);
     useEffect(() => {
+      const uiBlocked = Boolean(sidebarOpen || oracleResult);
       toolStateRef.current = {
         selectedType,
         selectedColor,
         selectedRot,
         toolMode,
-        viewing: !!viewingCharProphecy
+        viewing: !!viewingCharProphecy,
+        uiBlocked
       };
-    }, [selectedType, selectedColor, selectedRot, toolMode, viewingCharProphecy]);
+      if (uiBlocked && sceneApiRef.current && typeof sceneApiRef.current.resetPointers === "function") {
+        sceneApiRef.current.resetPointers();
+      }
+    }, [selectedType, selectedColor, selectedRot, toolMode, viewingCharProphecy, sidebarOpen, oracleResult]);
 
     const flashToast = (msg) => {
       setToast(msg);
@@ -461,7 +487,20 @@
       let moved = false;
       let lastPinchDist = 0;
 
+      const resetPointers = () => {
+        activePointers.clear();
+        downPos = null;
+        downTime = 0;
+        moved = false;
+        lastPinchDist = 0;
+        clearGhost();
+      };
+
       const onPointerDown = (e) => {
+        if (toolStateRef.current.uiBlocked) {
+          resetPointers();
+          return;
+        }
         activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (activePointers.size === 1) {
           downPos = { x: e.clientX, y: e.clientY };
@@ -475,6 +514,10 @@
       };
 
       const onPointerMove = (e) => {
+        if (toolStateRef.current.uiBlocked) {
+          resetPointers();
+          return;
+        }
         if (activePointers.has(e.pointerId)) {
           const prev = activePointers.get(e.pointerId);
           activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -521,6 +564,10 @@
       };
 
       const onPointerUp = (e) => {
+        if (toolStateRef.current.uiBlocked) {
+          resetPointers();
+          return;
+        }
         const wasSingle = activePointers.size === 1;
         activePointers.delete(e.pointerId);
         if (activePointers.size < 2) lastPinchDist = 0;
@@ -598,7 +645,8 @@
           for (const b of list || []) {
             bricksGroup.add(Bricks.createBrickMesh(THREE, b));
           }
-        }
+        },
+        resetPointers
       };
       sceneApiRef.current.syncBricks(bricksRef.current);
 
@@ -641,8 +689,45 @@
     };
 
     // ==========================================
-    // 4. 业务操作：玩家起卦 / 探查名士谶纬 / 分享传讯
+    // 4. 业务操作：玩家起卦 / 探查名士谶纬 / 指定名士解签与追问 / 分享传讯
     // ==========================================
+    const resolveTriVerses = (item) => {
+      if (!item) return { poem: "", ballad: "", chenyu: "", chenyuGloss: "" };
+      const v = item.verses && typeof item.verses === "object" ? item.verses : null;
+      if (v && (v.poem || v.ballad || v.chenyu)) {
+        const fb = Oracle.buildOfflineTriVerses ? Oracle.buildOfflineTriVerses(item.analysis || {}, item.question || "") : {};
+        return {
+          poem: v.poem || item.oracleVerse || fb.poem || "",
+          ballad: v.ballad || fb.ballad || "",
+          chenyu: v.chenyu || fb.chenyu || "",
+          chenyuGloss: item.chenyuGloss || fb.chenyuGloss || ""
+        };
+      }
+      const fb = Oracle.buildOfflineTriVerses ? Oracle.buildOfflineTriVerses(item.analysis || {}, item.question || "") : {};
+      return {
+        poem: item.oracleVerse || fb.poem || "",
+        ballad: fb.ballad || "",
+        chenyu: fb.chenyu || "",
+        chenyuGloss: item.chenyuGloss || fb.chenyuGloss || ""
+      };
+    };
+
+    const handleTakeoverProphecy = (e) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      if (animTimerRef.current) {
+        clearInterval(animTimerRef.current);
+        animTimerRef.current = null;
+      }
+      if (viewingCharProphecy && Array.isArray(viewingCharProphecy.bricks) && viewingCharProphecy.bricks.length) {
+        setBricks(viewingCharProphecy.bricks);
+      }
+      if (sceneApiRef.current && typeof sceneApiRef.current.resetPointers === "function") {
+        sceneApiRef.current.resetPointers();
+      }
+      setViewingCharProphecy(null);
+      flashToast("已接手改造此积木，可自由增删零件");
+    };
+
     const handleDivineNow = async () => {
       if (isDivining) return;
       if (!bricks.length) {
@@ -657,6 +742,10 @@
           bricks,
           commentatorChar: commChar || null
         });
+        setActiveVerseForm("poem");
+        setSelectedInterpCharId("");
+        setFollowUpInput("");
+        setRevealedMotiveMap({});
         setOracleResult(res);
         const latestRecs = await Oracle.loadOracleRecords(30);
         setRecords(latestRecs);
@@ -665,10 +754,70 @@
       }
     };
 
+    const handleSelectInterpretChar = async (charObj, forceRegen = false) => {
+      const Interp = global.ChenweiCharInterpreter;
+      if (!Interp || !oracleResult || !charObj) return;
+      const cid = String(charObj.id);
+      setSelectedInterpCharId(cid);
+      const existing = oracleResult.interpretations && oracleResult.interpretations[cid];
+      if (existing && !forceRegen) return;
+      if (interpretingCharId === cid) return;
+
+      const reqSeq = ++interpReqSeqRef.current;
+      setInterpretingCharId(cid);
+      try {
+        const { updatedRecord } = await Interp.interpretOracleByCharacter({
+          record: oracleResult,
+          charObj
+        });
+        if (updatedRecord) {
+          setOracleResult((prev) => (prev && prev.id === updatedRecord.id ? updatedRecord : prev));
+          setRecords((prev) => prev.map((r) => (r.id === updatedRecord.id ? updatedRecord : r)));
+        }
+        if (interpReqSeqRef.current === reqSeq) {
+          setInterpretingCharId("");
+        }
+      } catch (err) {
+        if (interpReqSeqRef.current === reqSeq) {
+          setInterpretingCharId("");
+          flashToast("名士解签失败，请稍后重试");
+        }
+      }
+    };
+
+    const handleSendFollowUp = async (customText = "") => {
+      const Interp = global.ChenweiCharInterpreter;
+      const qText = String(customText || followUpInput || "").trim();
+      if (!Interp || !oracleResult || !selectedInterpCharId || !qText || sendingFollowUp) return;
+      const charObj = characters.find((c) => String(c.id) === String(selectedInterpCharId));
+      const curThread = oracleResult.interpretations && oracleResult.interpretations[selectedInterpCharId];
+      if (!charObj || !curThread) return;
+
+      setSendingFollowUp(true);
+      setFollowUpInput("");
+      try {
+        const { updatedRecord } = await Interp.followUpOracleInterpretation({
+          record: oracleResult,
+          charObj,
+          thread: curThread,
+          userQuestion: qText
+        });
+        if (updatedRecord) {
+          setOracleResult((prev) => (prev && prev.id === updatedRecord.id ? updatedRecord : prev));
+          setRecords((prev) => prev.map((r) => (r.id === updatedRecord.id ? updatedRecord : r)));
+        }
+      } catch (err) {
+        flashToast("追问发送失败，请稍后再试");
+      } finally {
+        setSendingFollowUp(false);
+      }
+    };
+
     const handleInspectCharProphecy = async (charObj, forceRegenerate = false) => {
       const cid = String(charObj.id);
       const cached = charProphecies[cid];
       if (cached && !forceRegenerate) {
+        setProphecyVerseForm("poem");
         setViewingCharProphecy(cached);
         setProphecyCardExpanded(true);
         setSidebarOpen(false);
@@ -679,6 +828,7 @@
       try {
         const prop = await Oracle.requestCharacterProphecy(charObj);
         setCharProphecies((prev) => ({ ...prev, [cid]: prop }));
+        setProphecyVerseForm("poem");
         setViewingCharProphecy(prop);
         setProphecyCardExpanded(true);
         setSidebarOpen(false);
@@ -690,26 +840,43 @@
       }
     };
 
-    const handleShareToChar = async (charId, textSummary) => {
-      if (!global.chatHistoryStore || typeof global.chatHistoryStore.appendMessage !== "function") {
-        flashToast("传讯通道暂不可用");
+    const handleOpenShareModal = ({ record, activeThread = null, sourceKind = "player", defaultCharId = "" }) => {
+      if (!record) return;
+      if (!characters.length) {
+        flashToast("传讯中暂无可抄送的名士");
         return;
       }
-      const now = new Date();
-      const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      setShareNoteInput("");
+      setShareModalPayload({ record, activeThread, sourceKind, defaultCharId: String(defaultCharId || "") });
+    };
+
+    const handleConfirmShareToChar = async (targetChar) => {
+      if (!shareModalPayload || !targetChar || sharingCharId) return;
+      const CardEngine = global.ChenweiChatCardEngine;
+      if (!CardEngine || typeof CardEngine.sendChenweiCardToChat !== "function") {
+        flashToast("传讯卡片引擎未就绪");
+        return;
+      }
+      setSharingCharId(String(targetChar.id));
       try {
-        await global.chatHistoryStore.appendMessage(String(charId), {
-          id: `chenwei_share_${Date.now()}`,
-          isMe: true,
-          sender: "我",
-          senderId: "me",
-          text: textSummary,
-          time: hhmm,
-          timestamp: Date.now()
+        const res = await CardEngine.sendChenweiCardToChat({
+          targetChar,
+          record: shareModalPayload.record,
+          activeThread: shareModalPayload.activeThread,
+          sourceKind: shareModalPayload.sourceKind,
+          note: shareNoteInput
         });
-        flashToast("已将谶纬卦卷抄送传讯");
+        if (res && res.ok) {
+          setShareModalPayload(null);
+          setShareNoteInput("");
+          flashToast(`已将卦签卡片抄送至「${targetChar.name}」传讯主线`);
+        } else {
+          flashToast("抄送失败，请稍后重试");
+        }
       } catch (e) {
         flashToast("抄送失败");
+      } finally {
+        setSharingCharId("");
       }
     };
 
@@ -734,10 +901,18 @@
           userSelect: "none"
         }
       },
-      // 中央 100% 3D 乐高画布容器
+      // 中央 100% 3D 乐高画布容器（显式层级 + 弹窗/侧边栏开启时自动熔断指针，根治手机端 WebGL 触摸抢占）
       h("div", {
         ref: canvasMountRef,
-        style: { position: "absolute", inset: 0, width: "100%", height: "100%" }
+        style: {
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          zIndex: 1,
+          isolation: "isolate",
+          pointerEvents: (sidebarOpen || !!oracleResult) ? "none" : "auto"
+        }
       }),
 
       // 顶部极简浮栏
@@ -754,7 +929,9 @@
             alignItems: "center",
             justifyContent: "space-between",
             pointerEvents: "none",
-            zIndex: 20
+            zIndex: 30,
+            transform: "translateZ(0)",
+            WebkitTransform: "translateZ(0)"
           }
         },
         h(
@@ -764,6 +941,7 @@
             onClick: onBack,
             style: {
               pointerEvents: "auto",
+              touchAction: "manipulation",
               border: "1px solid rgba(139,115,85,0.22)",
               background: "rgba(255,252,246,0.92)",
               color: "#4A3C31",
@@ -807,6 +985,7 @@
             onClick: () => setSidebarOpen((v) => !v),
             style: {
               pointerEvents: "auto",
+              touchAction: "manipulation",
               border: "1px solid rgba(139,115,85,0.22)",
               background: sidebarOpen ? "#4A3C31" : "rgba(255,252,246,0.92)",
               color: sidebarOpen ? "#FFFDF7" : "#4A3C31",
@@ -824,7 +1003,7 @@
         )
       ),
 
-      // 左侧极简悬浮编辑小圆钮（仅自建模式显示，不遮挡中央积木）
+      // 左侧极简悬浮编辑小圆钮（独立合成层 + touchAction，防止移动端接手改造后失灵）
       !viewingCharProphecy &&
         h(
           "div",
@@ -836,7 +1015,10 @@
               display: "flex",
               flexDirection: "column",
               gap: "8px",
-              zIndex: 18
+              zIndex: 30,
+              pointerEvents: "auto",
+              transform: "translateZ(0)",
+              WebkitTransform: "translateZ(0)"
             }
           },
           [
@@ -858,6 +1040,7 @@
                   width: "36px",
                   height: "36px",
                   borderRadius: "50%",
+                  touchAction: "manipulation",
                   border: btn.active ? "1.5px solid #C84B31" : "1px solid rgba(139,115,85,0.22)",
                   background: btn.active ? "#C84B31" : "rgba(255,252,246,0.92)",
                   display: "flex",
@@ -873,7 +1056,7 @@
           )
         ),
 
-      // Toast 轻提示
+      // Toast 轻提示（显式 pointerEvents: none 不阻挡点击）
       toast &&
         h(
           "div",
@@ -882,8 +1065,10 @@
               position: "absolute",
               top: "calc(58px + env(safe-area-inset-top, 0px))",
               left: "50%",
-              transform: "translateX(-50%)",
-              zIndex: 50,
+              transform: "translateX(-50%) translateZ(0)",
+              WebkitTransform: "translateX(-50%) translateZ(0)",
+              zIndex: 80,
+              pointerEvents: "none",
               background: "rgba(62,52,43,0.92)",
               color: "#FFFDF7",
               padding: "6px 14px",
@@ -898,84 +1083,149 @@
 
       // 底部区域：自建模式为极简「所问何事 + 起卦」浮条；观摩名士模式为「名士谶纬手札卡片」
       viewingCharProphecy
-        ? h(
-            "div",
-            {
-              style: {
-                position: "absolute",
-                left: "12px",
-                right: "12px",
-                bottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
-                zIndex: 20,
-                background: "rgba(255,252,246,0.96)",
-                border: "1px solid rgba(184,155,114,0.38)",
-                borderRadius: "18px",
-                padding: "12px 14px",
-                boxShadow: "0 10px 30px rgba(62,52,43,0.14)",
-                maxHeight: prophecyCardExpanded ? "46%" : "58px",
-                overflowY: "auto",
-                transition: "max-height 0.2s ease"
-              }
-            },
-            h(
+        ? (() => {
+            const pTri = resolveTriVerses(viewingCharProphecy);
+            const pForms = Oracle.ORACLE_FORMS || [
+              { id: "poem", label: "古诗签" },
+              { id: "ballad", label: "东汉童谣" },
+              { id: "chenyu", label: "图谶秘语" }
+            ];
+            return h(
               "div",
               {
-                onClick: () => setProphecyCardExpanded((v) => !v),
-                style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", cursor: "pointer" }
+                style: {
+                  position: "absolute",
+                  left: "12px",
+                  right: "12px",
+                  bottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
+                  zIndex: 30,
+                  transform: "translateZ(0)",
+                  WebkitTransform: "translateZ(0)",
+                  background: "rgba(255,252,246,0.96)",
+                  border: "1px solid rgba(184,155,114,0.38)",
+                  borderRadius: "18px",
+                  padding: "12px 14px",
+                  boxShadow: "0 10px 30px rgba(62,52,43,0.14)",
+                  maxHeight: prophecyCardExpanded ? "48%" : "58px",
+                  overflowY: "auto",
+                  WebkitOverflowScrolling: "touch",
+                  touchAction: "pan-y",
+                  transition: "max-height 0.2s ease"
+                }
               },
               h(
                 "div",
-                { style: { display: "flex", alignItems: "center", gap: "8px", minWidth: 0 } },
-                avatarMap[viewingCharProphecy.charId]
-                  ? h("img", { src: avatarMap[viewingCharProphecy.charId], alt: viewingCharProphecy.charName, style: { width: "32px", height: "32px", borderRadius: "50%", objectFit: "cover", border: "1.5px solid #D4A03C" } })
-                  : h("div", { style: { width: "32px", height: "32px", borderRadius: "50%", background: "#D9C7B2", color: "#3E342B", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "13px" } }, viewingCharProphecy.charName.slice(0, 1)),
+                {
+                  onClick: () => setProphecyCardExpanded((v) => !v),
+                  style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", cursor: "pointer" }
+                },
                 h(
                   "div",
-                  { style: { minWidth: 0 } },
-                  h("div", { style: { fontSize: "13.5px", fontWeight: 800, color: "#3E342B" } }, `${viewingCharProphecy.charName} · ${viewingCharProphecy.hexagram}`),
-                  h("div", { style: { fontSize: "11px", color: "#8C7A68", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, `暗问：${viewingCharProphecy.question}`)
-                )
-              ),
-              h("span", { style: { fontSize: "11px", color: "#B84A39", fontWeight: 700, flexShrink: 0 } }, prophecyCardExpanded ? "收起" : "展开")
-            ),
-            prophecyCardExpanded &&
-              h(
-                "div",
-                { style: { marginTop: "10px", display: "flex", flexDirection: "column", gap: "8px", fontSize: "12.5px", lineHeight: 1.65 } },
-                h("div", { style: { background: "#F8F3EA", borderLeft: "3px solid #C84B31", padding: "7px 10px", borderRadius: "6px", whiteSpace: "pre-line", color: "#5C4738", fontWeight: 600 } }, viewingCharProphecy.oracleVerse),
-                h("div", { style: { color: "#3E342B" } }, viewingCharProphecy.charNote),
-                h(
-                  "div",
-                  { style: { display: "flex", gap: "8px", paddingTop: "4px" } },
+                  { style: { display: "flex", alignItems: "center", gap: "8px", minWidth: 0 } },
+                  avatarMap[viewingCharProphecy.charId]
+                    ? h("img", { src: avatarMap[viewingCharProphecy.charId], alt: viewingCharProphecy.charName, style: { width: "32px", height: "32px", borderRadius: "50%", objectFit: "cover", border: "1.5px solid #D4A03C" } })
+                    : h("div", { style: { width: "32px", height: "32px", borderRadius: "50%", background: "#D9C7B2", color: "#3E342B", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "13px" } }, viewingCharProphecy.charName.slice(0, 1)),
                   h(
-                    "button",
-                    {
-                      type: "button",
-                      onClick: () => {
-                        const cObj = characters.find((c) => String(c.id) === String(viewingCharProphecy.charId));
-                        if (cObj) handleInspectCharProphecy(cObj, true);
-                      },
-                      style: { flex: 1, padding: "8px", borderRadius: "10px", border: "1px solid #D5C5B0", background: "#FFF", color: "#4A3C31", fontSize: "12px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: "5px", cursor: "pointer" }
-                    },
-                    SvgIcon(h, "refresh", { size: 14, color: "#4A3C31" }),
-                    "重新起卦"
+                    "div",
+                    { style: { minWidth: 0 } },
+                    h("div", { style: { fontSize: "13.5px", fontWeight: 800, color: "#3E342B" } }, `${viewingCharProphecy.charName} · ${viewingCharProphecy.hexagram}`),
+                    h("div", { style: { fontSize: "11px", color: "#8C7A68", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, `暗问：${viewingCharProphecy.question}`)
+                  )
+                ),
+                h("span", { style: { fontSize: "11px", color: "#B84A39", fontWeight: 700, flexShrink: 0 } }, prophecyCardExpanded ? "收起" : "展开")
+              ),
+              prophecyCardExpanded &&
+                h(
+                  "div",
+                  { style: { marginTop: "10px", display: "flex", flexDirection: "column", gap: "8px", fontSize: "12.5px", lineHeight: 1.65 } },
+                  // 三体裁切换按钮
+                  h(
+                    "div",
+                    { style: { display: "flex", gap: "5px" } },
+                    pForms.map((fm) => {
+                      const act = prophecyVerseForm === fm.id;
+                      return h("button", {
+                        key: fm.id,
+                        type: "button",
+                        onClick: () => setProphecyVerseForm(fm.id),
+                        style: {
+                          flex: 1,
+                          touchAction: "manipulation",
+                          border: act ? "1px solid #C84B31" : "1px solid #E2D5C0",
+                          background: act ? "#C84B31" : "#F7F1E5",
+                          color: act ? "#FFFDF7" : "#5C4738",
+                          borderRadius: "8px",
+                          padding: "4px 6px",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          cursor: "pointer"
+                        }
+                      }, fm.label);
+                    })
                   ),
                   h(
-                    "button",
+                    "div",
                     {
-                      type: "button",
-                      onClick: () => {
-                        setViewingCharProphecy(null);
-                        flashToast("已接手改造此积木，可自由增删零件");
-                      },
-                      style: { flex: 1, padding: "8px", borderRadius: "10px", border: "none", background: "#C84B31", color: "#FFF", fontSize: "12px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: "5px", cursor: "pointer" }
+                      style: {
+                        background: "#F8F3EA",
+                        borderLeft: "3px solid #C84B31",
+                        padding: "7px 10px",
+                        borderRadius: "6px",
+                        whiteSpace: "pre-line",
+                        color: "#5C4738",
+                        fontWeight: 600,
+                        textAlign: prophecyVerseForm === "ballad" ? "center" : "left"
+                      }
                     },
-                    SvgIcon(h, "takeover", { size: 14, color: "#FFF" }),
-                    "接手改造"
+                    pTri[prophecyVerseForm] || pTri.poem
+                  ),
+                  prophecyVerseForm === "chenyu" && pTri.chenyuGloss &&
+                    h("div", { style: { fontSize: "11px", color: "#8C6239", background: "#FBF5E8", border: "1px dashed #DEC597", borderRadius: "6px", padding: "5px 8px" } }, pTri.chenyuGloss),
+                  h("div", { style: { color: "#3E342B" } }, viewingCharProphecy.charNote),
+                  h(
+                    "div",
+                    { style: { display: "flex", gap: "8px", paddingTop: "4px" } },
+                    h(
+                      "button",
+                      {
+                        type: "button",
+                        onClick: () => {
+                          const cObj = characters.find((c) => String(c.id) === String(viewingCharProphecy.charId));
+                          if (cObj) handleInspectCharProphecy(cObj, true);
+                        },
+                        style: { flex: 1, touchAction: "manipulation", padding: "8px", borderRadius: "10px", border: "1px solid #D5C5B0", background: "#FFF", color: "#4A3C31", fontSize: "12px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: "5px", cursor: "pointer" }
+                      },
+                      SvgIcon(h, "refresh", { size: 14, color: "#4A3C31" }),
+                      "重新起卦"
+                    ),
+                    h(
+                      "button",
+                      {
+                        type: "button",
+                        onClick: () => handleOpenShareModal({
+                          record: viewingCharProphecy,
+                          sourceKind: "char",
+                          defaultCharId: viewingCharProphecy.charId
+                        }),
+                        style: { flex: 1, touchAction: "manipulation", padding: "8px", borderRadius: "10px", border: "1px solid #D5C5B0", background: "#FFF", color: "#4A3C31", fontSize: "12px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", cursor: "pointer" }
+                      },
+                      SvgIcon(h, "share", { size: 13, color: "#4A3C31" }),
+                      "抄送名士"
+                    ),
+                    h(
+                      "button",
+                      {
+                        type: "button",
+                        onClick: handleTakeoverProphecy,
+                        style: { flex: 1, touchAction: "manipulation", padding: "8px", borderRadius: "10px", border: "none", background: "#C84B31", color: "#FFF", fontSize: "12px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", cursor: "pointer" }
+                      },
+                      SvgIcon(h, "takeover", { size: 14, color: "#FFF" }),
+                      "接手改造"
+                    )
                   )
                 )
-              )
-          )
+            );
+          })()
         : h(
             "div",
             {
@@ -984,7 +1234,9 @@
                 left: "12px",
                 right: "12px",
                 bottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
-                zIndex: 20,
+                zIndex: 30,
+                transform: "translateZ(0)",
+                WebkitTransform: "translateZ(0)",
                 background: "rgba(255,252,246,0.95)",
                 border: "1px solid rgba(184,155,114,0.35)",
                 borderRadius: "999px",
@@ -1060,7 +1312,7 @@
           ),
 
       // ==========================================
-      // 6. 可折叠多功能侧边栏（积木 / 名士 / 卷宗 / 简介）
+      // 6. 可折叠多功能侧边栏（积木 / 名士 / 卷宗 / 简介，独立合成层防移动端穿透）
       // ==========================================
       sidebarOpen &&
         h(
@@ -1070,16 +1322,22 @@
             style: {
               position: "fixed",
               inset: 0,
-              zIndex: 40,
+              zIndex: 60,
+              transform: "translateZ(0)",
+              WebkitTransform: "translateZ(0)",
               background: "rgba(44,36,28,0.34)",
               display: "flex",
-              justifyContent: "flex-end"
+              justifyContent: "flex-end",
+              pointerEvents: "auto"
             }
           },
           h(
             "div",
             {
+              onClick: (e) => e.stopPropagation(),
               style: {
+                position: "relative",
+                zIndex: 2,
                 width: "84%",
                 maxWidth: "330px",
                 height: "100%",
@@ -1087,6 +1345,10 @@
                 boxShadow: "-8px 0 30px rgba(44,36,28,0.18)",
                 display: "flex",
                 flexDirection: "column",
+                pointerEvents: "auto",
+                touchAction: "pan-y",
+                transform: "translateZ(0)",
+                WebkitTransform: "translateZ(0)",
                 paddingTop: "env(safe-area-inset-top, 0px)",
                 paddingBottom: "env(safe-area-inset-bottom, 0px)"
               }
@@ -1370,6 +1632,11 @@
                             onClick: () => {
                               setViewingCharProphecy(null);
                               if (Array.isArray(rec.bricks) && rec.bricks.length) playBuildAnimation(rec.bricks);
+                              setActiveVerseForm("poem");
+                              const firstInterpId = rec.interpretations ? Object.keys(rec.interpretations)[0] || "" : "";
+                              setSelectedInterpCharId(firstInterpId);
+                              setFollowUpInput("");
+                              setRevealedMotiveMap({});
                               setOracleResult(rec);
                               setSidebarOpen(false);
                             },
@@ -1419,73 +1686,520 @@
         ),
 
       // ==========================================
-      // 7. 玩家解签结果浮窗
+      // 7. 玩家解签结果浮窗（三体裁一键切换 + 指定名士解签博弈 + 多轮追问）
       // ==========================================
       oracleResult &&
-        h(
-          "div",
-          {
-            onClick: (e) => { if (e.target === e.currentTarget) setOracleResult(null); },
-            style: {
-              position: "fixed",
-              inset: 0,
-              zIndex: 45,
-              background: "rgba(44,36,28,0.45)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "16px"
-            }
-          },
-          h(
+        (() => {
+          const tri = resolveTriVerses(oracleResult);
+          const forms = Oracle.ORACLE_FORMS || [
+            { id: "poem", label: "古诗签", seal: "诗签", subtitle: "四言/五言/七言绝句" },
+            { id: "ballad", label: "东汉童谣", seal: "童谣", subtitle: "巷陌歌谣 · 隐喻时局" },
+            { id: "chenyu", label: "图谶秘语", seal: "图谶", subtitle: "河图纬书 · 拆字象数" }
+          ];
+          const curFormMeta = forms.find((f) => f.id === activeVerseForm) || forms[0];
+          const Interp = global.ChenweiCharInterpreter;
+          const interpMap = (oracleResult.interpretations && typeof oracleResult.interpretations === "object") ? oracleResult.interpretations : {};
+          const activeCharObj = selectedInterpCharId ? characters.find((c) => String(c.id) === String(selectedInterpCharId)) : null;
+          const activeThread = selectedInterpCharId ? interpMap[selectedInterpCharId] : null;
+          const isCharBusy = Boolean(interpretingCharId && interpretingCharId === selectedInterpCharId);
+
+          return h(
             "div",
             {
+              onClick: (e) => { if (e.target === e.currentTarget) setOracleResult(null); },
               style: {
-                width: "100%",
-                maxWidth: "350px",
-                maxHeight: "82vh",
-                overflowY: "auto",
-                background: "#FAF6EE",
-                border: "1.5px solid #D4A03C",
-                borderRadius: "20px",
-                padding: "16px",
-                boxShadow: "0 16px 40px rgba(44,36,28,0.28)",
+                position: "fixed",
+                inset: 0,
+                zIndex: 70,
+                transform: "translateZ(0)",
+                WebkitTransform: "translateZ(0)",
+                background: "rgba(44,36,28,0.46)",
                 display: "flex",
-                flexDirection: "column",
-                gap: "10px"
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "14px",
+                pointerEvents: "auto"
               }
             },
             h(
               "div",
-              { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
-              h("div", { style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "15px", fontWeight: 900, color: "#C84B31" } },
-                SvgIcon(h, "oracle", { size: 18, color: "#C84B31" }),
-                oracleResult.hexagram
-              ),
-              h("button", { type: "button", onClick: () => setOracleResult(null), style: { border: "none", background: "transparent", cursor: "pointer", padding: "4px" } }, SvgIcon(h, "close", { size: 18, color: "#6B5A49" }))
-            ),
-            h("div", { style: { fontSize: "12px", color: "#7D6B59" } }, `所问：${oracleResult.question}`),
-            h("div", { style: { background: "#FFFDF8", borderLeft: "3px solid #C84B31", padding: "10px 12px", borderRadius: "8px", whiteSpace: "pre-line", fontSize: "13.5px", fontWeight: 700, lineHeight: 1.75, color: "#3E342B" } }, oracleResult.oracleVerse),
-            h("div", { style: { fontSize: "12.5px", lineHeight: 1.7, color: "#4A3C31" } }, oracleResult.structureReading),
-            h("div", { style: { background: "#F2EAE0", borderRadius: "10px", padding: "9px 11px", fontSize: "12px", lineHeight: 1.65, color: "#5C4738" } }, `建言：${oracleResult.advice}`),
-            oracleResult.charComment &&
-              h("div", { style: { background: "#FFF7F4", border: "1px solid #F0C9BD", borderRadius: "10px", padding: "9px 11px", fontSize: "12px", lineHeight: 1.65, color: "#6E2E22" } },
-                h("strong", null, `${oracleResult.commentatorName || "名士"}点评：`),
-                oracleResult.charComment
-              ),
-            commentatorCharId &&
+              {
+                onClick: (e) => e.stopPropagation(),
+                style: {
+                  width: "100%",
+                  maxWidth: "372px",
+                  maxHeight: "86vh",
+                  overflowY: "auto",
+                  WebkitOverflowScrolling: "touch",
+                  touchAction: "pan-y",
+                  background: "#FAF6EE",
+                  border: "1.5px solid #D4A03C",
+                  borderRadius: "20px",
+                  padding: "15px",
+                  boxShadow: "0 16px 40px rgba(44,36,28,0.28)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px"
+                }
+              },
+              // 顶部卦名与关闭
               h(
-                "button",
+                "div",
+                { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
+                h("div", { style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "15px", fontWeight: 900, color: "#C84B31" } },
+                  SvgIcon(h, "oracle", { size: 18, color: "#C84B31" }),
+                  oracleResult.hexagram
+                ),
+                h("button", { type: "button", onClick: () => setOracleResult(null), style: { border: "none", background: "transparent", cursor: "pointer", padding: "4px", touchAction: "manipulation" } }, SvgIcon(h, "close", { size: 18, color: "#6B5A49" }))
+              ),
+              h("div", { style: { fontSize: "12px", color: "#7D6B59" } }, `所问：${oracleResult.question}`),
+
+              // 东汉三体裁切换按钮（古诗签 / 东汉童谣 / 图谶秘语）
+              h(
+                "div",
+                { style: { display: "flex", gap: "6px", background: "#EFE7D8", padding: "4px", borderRadius: "11px" } },
+                forms.map((fm) => {
+                  const act = activeVerseForm === fm.id;
+                  return h(
+                    "button",
+                    {
+                      key: fm.id,
+                      type: "button",
+                      onClick: () => setActiveVerseForm(fm.id),
+                      style: {
+                        flex: 1,
+                        touchAction: "manipulation",
+                        border: "none",
+                        borderRadius: "8px",
+                        padding: "6px 4px",
+                        fontSize: "11.5px",
+                        fontWeight: 800,
+                        background: act ? "#C84B31" : "transparent",
+                        color: act ? "#FFFDF7" : "#5C4738",
+                        boxShadow: act ? "0 2px 6px rgba(200,75,49,0.25)" : "none",
+                        cursor: "pointer"
+                      }
+                    },
+                    fm.label
+                  );
+                })
+              ),
+
+              // 当前体裁签文展示框
+              h(
+                "div",
                 {
-                  type: "button",
-                  onClick: () => handleShareToChar(commentatorCharId, `我在谶纬小摊搭了 ${bricks.length} 块积木问「${oracleResult.question}」，得卦【${oracleResult.hexagram}】：${oracleResult.oracleVerse.replace(/\n/g, " ")}`),
-                  style: { border: "none", borderRadius: "10px", background: "#4A3C31", color: "#FFFDF7", padding: "9px", fontSize: "12.5px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", cursor: "pointer" }
+                  style: {
+                    background: activeVerseForm === "chenyu" ? "#FFF9F0" : "#FFFDF8",
+                    border: activeVerseForm === "chenyu" ? "1px solid #DEC292" : "1px solid #EAE0CE",
+                    borderLeft: "3.5px solid #C84B31",
+                    padding: "10px 12px",
+                    borderRadius: "10px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px"
+                  }
                 },
-                SvgIcon(h, "share", { size: 15, color: "#FFFDF7" }),
-                "抄送卦卷给同行名士"
+                h(
+                  "div",
+                  { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+                  h("span", { style: { fontSize: "10.5px", color: "#9C7A54", fontWeight: 700 } }, curFormMeta.subtitle || curFormMeta.label),
+                  h("span", { style: { fontSize: "10px", fontWeight: 800, color: "#C84B31", border: "1px solid rgba(200,75,49,0.45)", borderRadius: "4px", padding: "1px 5px" } }, curFormMeta.seal || curFormMeta.label)
+                ),
+                h(
+                  "div",
+                  {
+                    style: {
+                      whiteSpace: "pre-line",
+                      fontSize: activeVerseForm === "ballad" ? "13.5px" : "13.5px",
+                      fontWeight: 700,
+                      lineHeight: 1.8,
+                      color: "#3E342B",
+                      textAlign: activeVerseForm === "ballad" ? "center" : "left",
+                      letterSpacing: activeVerseForm === "chenyu" ? "0.6px" : "0.2px"
+                    }
+                  },
+                  tri[activeVerseForm] || tri.poem
+                ),
+                activeVerseForm === "chenyu" && tri.chenyuGloss &&
+                  h(
+                    "div",
+                    { style: { fontSize: "11.5px", lineHeight: 1.55, color: "#7B5630", background: "#F8EEDB", borderRadius: "7px", padding: "6px 8px", border: "1px dashed #D8B884" } },
+                    tri.chenyuGloss
+                  )
+              ),
+
+              h("div", { style: { fontSize: "12.5px", lineHeight: 1.7, color: "#4A3C31" } }, oracleResult.structureReading),
+              h("div", { style: { background: "#F2EAE0", borderRadius: "10px", padding: "9px 11px", fontSize: "12px", lineHeight: 1.65, color: "#5C4738" } }, `建言：${oracleResult.advice}`),
+              oracleResult.charComment &&
+                h("div", { style: { background: "#FFF7F4", border: "1px solid #F0C9BD", borderRadius: "10px", padding: "9px 11px", fontSize: "12px", lineHeight: 1.65, color: "#6E2E22" } },
+                  h("strong", null, `${oracleResult.commentatorName || "名士"}附评：`),
+                  oracleResult.charComment
+                ),
+
+              // ==========================================
+              // 指定名士解签 + 善/恶意谎言博弈 + 多轮追问区
+              // ==========================================
+              Interp && characters.length > 0 &&
+                h(
+                  "div",
+                  { style: { borderTop: "1px dashed #DFD1B8", paddingTop: "10px", display: "flex", flexDirection: "column", gap: "8px" } },
+                  h(
+                    "div",
+                    { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+                    h("span", { style: { fontSize: "12.5px", fontWeight: 800, color: "#3E342B" } }, "请名士解签（可多轮追问）"),
+                    h("span", { style: { fontSize: "10.5px", color: "#8C7A68" } }, "含近30条传讯与私心博弈")
+                  ),
+                  // 名士头像横向选择条
+                  h(
+                    "div",
+                    { style: { display: "flex", gap: "7px", overflowX: "auto", paddingBottom: "4px", WebkitOverflowScrolling: "touch" } },
+                    characters.map((c) => {
+                      const cid = String(c.id);
+                      const av = avatarMap[cid];
+                      const isSel = selectedInterpCharId === cid;
+                      const hasDone = Boolean(interpMap[cid]);
+                      return h(
+                        "button",
+                        {
+                          key: cid,
+                          type: "button",
+                          onClick: () => handleSelectInterpretChar(c, false),
+                          style: {
+                            position: "relative",
+                            flexShrink: 0,
+                            touchAction: "manipulation",
+                            border: isSel ? "1.5px solid #C84B31" : "1px solid #E3D6C0",
+                            background: isSel ? "#FFF4EE" : "#FFFDF8",
+                            borderRadius: "12px",
+                            padding: "5px 8px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            cursor: "pointer"
+                          }
+                        },
+                        av
+                          ? h("img", { src: av, alt: c.name, style: { width: "22px", height: "22px", borderRadius: "50%", objectFit: "cover" } })
+                          : h("span", { style: { width: "22px", height: "22px", borderRadius: "50%", background: "#DECBB4", color: "#3E342B", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10.5px", fontWeight: 800 } }, c.name.slice(0, 1)),
+                        h("span", { style: { fontSize: "11.5px", fontWeight: 700, color: isSel ? "#C84B31" : "#4A3C31", whiteSpace: "nowrap" } }, c.name),
+                        hasDone && h("span", { style: { width: "6px", height: "6px", borderRadius: "50%", background: "#C84B31", flexShrink: 0 } })
+                      );
+                    })
+                  ),
+
+                  // 正在推演加载态
+                  isCharBusy &&
+                    h(
+                      "div",
+                      { style: { background: "#FFFDF8", border: "1px solid #E6D9C3", borderRadius: "12px", padding: "12px", fontSize: "12px", color: "#7D6B59", textAlign: "center" } },
+                      `正在请「${activeCharObj ? activeCharObj.name : "名士"}」结合近 30 条传讯细观卦象…`
+                    ),
+
+                  // 已选中名士的解签与追问对话流
+                  !isCharBusy && activeThread && activeCharObj &&
+                    h(
+                      "div",
+                      { style: { background: "#FFFDF8", border: "1px solid #E4D5BC", borderRadius: "14px", padding: "10px", display: "flex", flexDirection: "column", gap: "8px" } },
+                      // 对话区头栏
+                      h(
+                        "div",
+                        { style: { display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #F0E6D4", paddingBottom: "6px" } },
+                        h(
+                          "div",
+                          { style: { display: "flex", alignItems: "center", gap: "6px" } },
+                          h("strong", { style: { fontSize: "12.5px", color: "#3E342B" } }, `${activeCharObj.name} · 解签`),
+                          h("span", { style: { fontSize: "10px", color: "#8C7A68" } }, `已参近 ${activeThread.chatContextCount || 0} 条传讯`)
+                        ),
+                        h(
+                          "button",
+                          {
+                            type: "button",
+                            onClick: () => handleSelectInterpretChar(activeCharObj, true),
+                            style: { border: "1px solid #DFD0B8", background: "#FAF6EE", color: "#6B5A49", borderRadius: "7px", padding: "2px 7px", fontSize: "10.5px", fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }
+                          },
+                          "重解"
+                        )
+                      ),
+
+                      // 多轮消息列表
+                      h(
+                        "div",
+                        { style: { display: "flex", flexDirection: "column", gap: "8px", maxHeight: "230px", overflowY: "auto", WebkitOverflowScrolling: "touch", paddingRight: "2px" } },
+                        (activeThread.turns || []).map((t) => {
+                          if (t.role === "user") {
+                            return h(
+                              "div",
+                              { key: t.id, style: { alignSelf: "flex-end", maxWidth: "86%", background: "#4A3C31", color: "#FFFDF7", borderRadius: "12px 12px 3px 12px", padding: "7px 10px", fontSize: "12px", lineHeight: 1.55 } },
+                              t.text
+                            );
+                          }
+                          const isRev = !!revealedMotiveMap[t.id];
+                          const stMeta = (Interp.STANCE_META && Interp.STANCE_META[t.stance]) || { label: "心绪难测", tone: "#5C4738", bg: "#F4EDE1", border: "#DECFA8" };
+                          return h(
+                            "div",
+                            { key: t.id, style: { alignSelf: "flex-start", width: "96%", background: "#FAF4E8", border: "1px solid #E8DBC5", borderRadius: "12px 12px 12px 3px", padding: "8px 10px", display: "flex", flexDirection: "column", gap: "5px" } },
+                            h("div", { style: { fontSize: "12.5px", lineHeight: 1.65, color: "#3E342B", whiteSpace: "pre-wrap" } }, t.text),
+                            t.tellClue &&
+                              h("div", { style: { fontSize: "11px", color: "#8B745D", fontStyle: "italic", lineHeight: 1.45 } }, `微察：${t.tellClue}`),
+                            t.hiddenMotive &&
+                              h(
+                                "div",
+                                { style: { paddingTop: "2px" } },
+                                h(
+                                  "button",
+                                  {
+                                    type: "button",
+                                    onClick: () => setRevealedMotiveMap((prev) => ({ ...prev, [t.id]: !prev[t.id] })),
+                                    style: {
+                                      border: "1px dashed #D3BEA0",
+                                      background: isRev ? stMeta.bg : "#FFFDF8",
+                                      color: isRev ? stMeta.tone : "#7D6B59",
+                                      borderRadius: "7px",
+                                      padding: "3px 8px",
+                                      fontSize: "10.5px",
+                                      fontWeight: 700,
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "4px",
+                                      cursor: "pointer",
+                                      touchAction: "manipulation"
+                                    }
+                                  },
+                                  SvgIcon(h, "eye", { size: 12, color: isRev ? stMeta.tone : "#7D6B59" }),
+                                  isRev ? `收起心绪 · ${stMeta.label}` : "窥探心绪（查看真伪）"
+                                ),
+                                isRev &&
+                                  h(
+                                    "div",
+                                    { style: { marginTop: "5px", background: stMeta.bg, border: `1px solid ${stMeta.border}`, borderRadius: "8px", padding: "6px 8px", fontSize: "11.5px", lineHeight: 1.55, color: stMeta.tone } },
+                                    h("strong", null, `【${stMeta.label}】`),
+                                    t.hiddenMotive
+                                  )
+                              )
+                          );
+                        })
+                      ),
+
+                      // 快捷追问胶囊
+                      h(
+                        "div",
+                        { style: { display: "flex", gap: "5px", overflowX: "auto", paddingBottom: "2px", WebkitOverflowScrolling: "touch" } },
+                        (Interp.QUICK_FOLLOWUPS || []).map((q, idx) =>
+                          h(
+                            "button",
+                            {
+                              key: idx,
+                              type: "button",
+                              disabled: sendingFollowUp,
+                              onClick: () => handleSendFollowUp(q),
+                              style: {
+                                flexShrink: 0,
+                                touchAction: "manipulation",
+                                border: "1px solid #E2D4BC",
+                                background: "#F7F0E3",
+                                color: "#5C4738",
+                                borderRadius: "999px",
+                                padding: "4px 9px",
+                                fontSize: "10.5px",
+                                fontWeight: 700,
+                                cursor: sendingFollowUp ? "wait" : "pointer"
+                              }
+                            },
+                            q
+                          )
+                        )
+                      ),
+
+                      // 自由追问输入框
+                      h(
+                        "div",
+                        { style: { display: "flex", gap: "6px", alignItems: "center" } },
+                        h("input", {
+                          type: "text",
+                          value: followUpInput,
+                          disabled: sendingFollowUp,
+                          onChange: (e) => setFollowUpInput(e.target.value),
+                          onKeyDown: (e) => { if (e.key === "Enter") handleSendFollowUp(); },
+                          placeholder: `继续追问${activeCharObj.name}…`,
+                          style: { flex: 1, minWidth: 0, border: "1px solid #DDD0B8", background: "#FAF6EE", borderRadius: "999px", padding: "7px 11px", fontSize: "12px", color: "#3E342B", outline: "none", fontFamily: "inherit" }
+                        }),
+                        h(
+                          "button",
+                          {
+                            type: "button",
+                            disabled: sendingFollowUp || !followUpInput.trim(),
+                            onClick: () => handleSendFollowUp(),
+                            style: {
+                              border: "none",
+                              touchAction: "manipulation",
+                              borderRadius: "999px",
+                              background: sendingFollowUp || !followUpInput.trim() ? "#C9B9A3" : "#C84B31",
+                              color: "#FFFDF7",
+                              padding: "7px 11px",
+                              fontSize: "11.5px",
+                              fontWeight: 700,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              cursor: sendingFollowUp ? "wait" : "pointer",
+                              flexShrink: 0
+                            }
+                          },
+                          SvgIcon(h, "send", { size: 13, color: "#FFFDF7" }),
+                          sendingFollowUp ? "…" : "追问"
+                        )
+                      ),
+
+                      // 抄送传讯按钮
+                      h(
+                        "button",
+                        {
+                          type: "button",
+                          onClick: () => handleOpenShareModal({
+                            record: oracleResult,
+                            activeThread,
+                            sourceKind: "player",
+                            defaultCharId: activeCharObj.id
+                          }),
+                          style: { border: "none", touchAction: "manipulation", borderRadius: "10px", background: "#4A3C31", color: "#FFFDF7", padding: "8px", fontSize: "12px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", cursor: "pointer" }
+                        },
+                        SvgIcon(h, "share", { size: 14, color: "#FFFDF7" }),
+                        `抄送卦签卡片给名士`
+                      )
+                    )
+                ),
+
+              !selectedInterpCharId &&
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    onClick: () => handleOpenShareModal({
+                      record: oracleResult,
+                      activeThread: null,
+                      sourceKind: "player",
+                      defaultCharId: commentatorCharId || ""
+                    }),
+                    style: { border: "none", touchAction: "manipulation", borderRadius: "10px", background: "#4A3C31", color: "#FFFDF7", padding: "9px", fontSize: "12.5px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", cursor: "pointer" }
+                  },
+                  SvgIcon(h, "share", { size: 15, color: "#FFFDF7" }),
+                  "抄送卦签卡片给名士"
+                )
+            )
+          );
+        })(),
+
+      // ==========================================
+      // 8. 抄送卦签卡片至名士传讯主线选择器浮层
+      // ==========================================
+      shareModalPayload &&
+        (() => {
+          const orderedChars = [...characters].sort((a, b) => {
+            const aHit = String(a.id) === shareModalPayload.defaultCharId ? -1 : 0;
+            const bHit = String(b.id) === shareModalPayload.defaultCharId ? -1 : 0;
+            return aHit - bHit;
+          });
+          return h(
+            "div",
+            {
+              onClick: (e) => { if (e.target === e.currentTarget) setShareModalPayload(null); },
+              style: {
+                position: "fixed",
+                inset: 0,
+                zIndex: 85,
+                transform: "translateZ(0)",
+                WebkitTransform: "translateZ(0)",
+                background: "rgba(38,30,22,0.52)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "16px",
+                pointerEvents: "auto"
+              }
+            },
+            h(
+              "div",
+              {
+                onClick: (e) => e.stopPropagation(),
+                style: {
+                  width: "100%",
+                  maxWidth: "340px",
+                  maxHeight: "76vh",
+                  overflowY: "auto",
+                  WebkitOverflowScrolling: "touch",
+                  touchAction: "pan-y",
+                  background: "#FAF6EE",
+                  border: "1.5px solid #D4A03C",
+                  borderRadius: "18px",
+                  padding: "14px",
+                  boxShadow: "0 16px 40px rgba(38,30,22,0.32)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px"
+                }
+              },
+              h(
+                "div",
+                { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+                h("div", { style: { fontSize: "14px", fontWeight: 900, color: "#3E342B" } }, "抄送卦签卡片至传讯"),
+                h("button", { type: "button", onClick: () => setShareModalPayload(null), style: { border: "none", background: "transparent", padding: "4px", cursor: "pointer" } }, SvgIcon(h, "close", { size: 17, color: "#6B5A49" }))
+              ),
+              h("div", { style: { fontSize: "11.5px", color: "#7D6B59", lineHeight: 1.5 } },
+                "卡片在传讯中仅展示精致标题，静默送入对方聊天主线；切回传讯手动点击「触发AI回复」后，名士将结合全量人设与卡片内容回复。"
+              ),
+              h("input", {
+                type: "text",
+                value: shareNoteInput,
+                onChange: (e) => setShareNoteInput(e.target.value),
+                placeholder: "附一句想对 TA 说的话（可选）…",
+                style: { width: "100%", boxSizing: "border-box", border: "1px solid #DDD0B8", background: "#FFFDF8", borderRadius: "10px", padding: "8px 10px", fontSize: "12px", color: "#3E342B", outline: "none", fontFamily: "inherit" }
+              }),
+              h(
+                "div",
+                { style: { display: "flex", flexDirection: "column", gap: "7px", maxHeight: "260px", overflowY: "auto", WebkitOverflowScrolling: "touch" } },
+                orderedChars.map((c) => {
+                  const cid = String(c.id);
+                  const av = avatarMap[cid];
+                  const isDef = cid === shareModalPayload.defaultCharId;
+                  const isSending = sharingCharId === cid;
+                  return h(
+                    "button",
+                    {
+                      key: cid,
+                      type: "button",
+                      disabled: Boolean(sharingCharId),
+                      onClick: () => handleConfirmShareToChar(c),
+                      style: {
+                        width: "100%",
+                        touchAction: "manipulation",
+                        border: isDef ? "1.5px solid #C84B31" : "1px solid #E5D9C4",
+                        background: isDef ? "#FFF6F0" : "#FFFDF8",
+                        borderRadius: "12px",
+                        padding: "8px 10px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "8px",
+                        cursor: isSending ? "wait" : "pointer"
+                      }
+                    },
+                    h(
+                      "div",
+                      { style: { display: "flex", alignItems: "center", gap: "8px", minWidth: 0 } },
+                      av
+                        ? h("img", { src: av, alt: c.name, style: { width: "30px", height: "30px", borderRadius: "50%", objectFit: "cover", flexShrink: 0 } })
+                        : h("span", { style: { width: "30px", height: "30px", borderRadius: "50%", background: "#DECBB4", color: "#3E342B", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 800, flexShrink: 0 } }, c.name.slice(0, 1)),
+                      h("span", { style: { fontSize: "13px", fontWeight: 800, color: "#3E342B" } }, c.name),
+                      isDef && h("span", { style: { fontSize: "10px", color: "#C84B31", background: "#FBECE9", borderRadius: "999px", padding: "1px 6px", fontWeight: 700 } }, "当前名士")
+                    ),
+                    h("span", { style: { fontSize: "11.5px", fontWeight: 700, color: "#C84B31", flexShrink: 0 } }, isSending ? "抄送中…" : "发送卡片")
+                  );
+                })
               )
-          )
-        )
+            )
+          );
+        })()
     );
   }
 

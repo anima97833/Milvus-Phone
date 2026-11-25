@@ -109,6 +109,30 @@
       sizes: ["3x1", "2x2"],
       defaultSize: "3x1",
       defaultSkin: "paper"
+    },
+    {
+      type: "chenwei_oracle",
+      name: "谶纬签匣",
+      desc: "展示自己曾解过的历史卦签或指定名士的专属签文，桌面可切诗签/童谣/图谶",
+      sizes: ["2x1", "3x1", "4x1", "2x2"],
+      defaultSize: "2x2",
+      defaultSkin: "paper"
+    },
+    {
+      type: "couple_bills",
+      name: "共同账本",
+      desc: "同步情侣空间共同记账最新 5 笔收支，点击展开全量流水与名士批注",
+      sizes: ["2x1", "3x1", "4x1", "2x2"],
+      defaultSize: "2x2",
+      defaultSkin: "paper"
+    },
+    {
+      type: "couple_wish",
+      name: "心愿签",
+      desc: "展示情侣空间用户或角色最新一条愿望，智能居中换行，可一键递送传讯",
+      sizes: ["2x1", "3x1", "4x1", "2x2"],
+      defaultSize: "2x2",
+      defaultSkin: "paper"
     }
   ];
   const CATALOG_MAP = Object.fromEntries(WIDGET_CATALOG.map((w) => [w.type, w]));
