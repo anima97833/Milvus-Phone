@@ -133,6 +133,14 @@
       sizes: ["2x1", "3x1", "4x1", "2x2"],
       defaultSize: "2x2",
       defaultSkin: "paper"
+    },
+    {
+      type: "guangling_news",
+      name: "广陵联播",
+      desc: "Tomodachi Life 风格 3D 演播室，定时/离线补播今日小手机趣闻与动态，可自定义主播立绘",
+      sizes: ["2x1", "3x1", "4x1", "2x2"],
+      defaultSize: "3x1",
+      defaultSkin: "ink"
     }
   ];
   const CATALOG_MAP = Object.fromEntries(WIDGET_CATALOG.map((w) => [w.type, w]));

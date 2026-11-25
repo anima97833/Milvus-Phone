@@ -1341,7 +1341,10 @@
         global.SeasonalPushUI.QueueHost &&
         h(global.SeasonalPushUI.QueueHost, {
           waitForUpdateClosed: !gateReady || open || updatePending
-        })
+        }),
+      global.GuanglingNewsStudio &&
+        global.GuanglingNewsStudio.AutoBroadcastHost &&
+        h(global.GuanglingNewsStudio.AutoBroadcastHost, null)
     );
   }
 

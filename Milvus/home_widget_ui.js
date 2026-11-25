@@ -81,6 +81,13 @@
         return h("svg", common,
           h("path", { d: "M12 3.2l2.4 5.1 5.6.8-4.1 3.9 1 5.6L12 15.9 7.1 18.6l1-5.6-4.1-3.9 5.6-.8z" })
         );
+      case "guangling_news": // 手绘广陵联播电视机
+        return h("svg", common,
+          h("rect", { x: 2.5, y: 7, width: 19, height: 13.5, rx: 3 }),
+          h("polyline", { points: "17 2.5 12 7 7 2.5" }),
+          h("line", { x1: 6.5, y1: 12, x2: 12, y2: 12 }),
+          h("circle", { cx: 16.5, cy: 14, r: 1.5 })
+        );
       case "caret_down": // 倒三角展开符号
         return h("svg", { ...common, stroke: "none", fill: color },
           h("path", { d: "M6.5 9l5.5 6.5L17.5 9z" })
@@ -1734,6 +1741,20 @@
               )
             )
           )
+      );
+    }
+
+    // 8.5 广陵联播（Tomodachi Life 风格 3D 演播室，桌面轻量零 WebGL，点击全屏入台）
+    if (widget.type === "guangling_news") {
+      return wrapCard(
+        global.GuanglingNewsStudio && global.GuanglingNewsStudio.WidgetView
+          ? h(global.GuanglingNewsStudio.WidgetView, {
+              widget,
+              skin,
+              isSquare,
+              isCompact: widget.size === "2x1"
+            })
+          : h("div", { style: { fontSize: "12px", color: skin.subText, padding: "10px" } }, "广陵联播加载中...")
       );
     }
 

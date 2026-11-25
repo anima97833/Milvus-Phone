@@ -1046,6 +1046,65 @@
     }
     rafId = requestAnimationFrame(animate);
 
+    // 独立 IndexedDB 记忆知情同意状态（零 localStorage 写入，勾选一次后下次默认同意）
+    const CONSENT_DB = "milvus_entry_gate_idb";
+    const CONSENT_STORE = "consent";
+    const CONSENT_KEY = "disclaimer_agreed_v1";
+
+    function openConsentDB() {
+      return new Promise((resolve) => {
+        if (typeof indexedDB === "undefined" || !indexedDB) return resolve(null);
+        try {
+          const req = indexedDB.open(CONSENT_DB, 1);
+          req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains(CONSENT_STORE)) {
+              db.createObjectStore(CONSENT_STORE);
+            }
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => resolve(null);
+        } catch (_) {
+          resolve(null);
+        }
+      });
+    }
+
+    async function readSavedConsent() {
+      const db = await openConsentDB();
+      if (!db) return false;
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction(CONSENT_STORE, "readonly");
+          const req = tx.objectStore(CONSENT_STORE).get(CONSENT_KEY);
+          req.onsuccess = () => {
+            try { db.close(); } catch (_) {}
+            resolve(!!req.result);
+          };
+          req.onerror = () => {
+            try { db.close(); } catch (_) {}
+            resolve(false);
+          };
+        } catch (_) {
+          try { db.close(); } catch (_) {}
+          resolve(false);
+        }
+      });
+    }
+
+    async function writeSavedConsent(agreed) {
+      const db = await openConsentDB();
+      if (!db) return;
+      try {
+        const tx = db.transaction(CONSENT_STORE, "readwrite");
+        tx.objectStore(CONSENT_STORE).put(!!agreed, CONSENT_KEY);
+        tx.oncomplete = () => { try { db.close(); } catch (_) {} };
+        tx.onerror = () => { try { db.close(); } catch (_) {} };
+      } catch (_) {
+        try { db.close(); } catch (_) {}
+      }
+    }
+
     // 勾选状态同步按钮外观
     function syncAgreeUI() {
       const ok = !!agreeCheckbox.checked;
@@ -1055,7 +1114,18 @@
         noticeCard.classList.remove("mgate-highlight");
       }
     }
-    agreeCheckbox.addEventListener("change", syncAgreeUI);
+    agreeCheckbox.addEventListener("change", () => {
+      syncAgreeUI();
+      writeSavedConsent(!!agreeCheckbox.checked);
+    });
+
+    // 启动时读取历史同意状态，勾选过一次即默认同意
+    readSavedConsent().then((wasAgreed) => {
+      if (wasAgreed && !destroyed) {
+        agreeCheckbox.checked = true;
+        syncAgreeUI();
+      }
+    });
 
     // 完整声明弹窗控制
     function openModal() {
@@ -1077,6 +1147,7 @@
     modalAgree.addEventListener("click", () => {
       agreeCheckbox.checked = true;
       syncAgreeUI();
+      writeSavedConsent(true);
       closeModal();
     });
 
@@ -1114,6 +1185,7 @@
         enterBtn.classList.add("mgate-shake");
         return;
       }
+      writeSavedConsent(true);
       destroyAndEnter();
     });
   }

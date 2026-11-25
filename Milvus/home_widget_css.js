@@ -89,6 +89,34 @@
       COMMON_PSEUDO_HINT
     ].join("\n"),
 
+    guangling_news: [
+      "/* === 广陵联播小组件默认 CSS（支持 ::before / ::after 伪元素） === */",
+      ".hw-card {",
+      "  position: relative;",
+      "  overflow: visible;",
+      "}",
+      ".hw-surface {",
+      "  border-radius: 20px;",
+      "  background: linear-gradient(145deg, rgba(16, 36, 76, 0.92), rgba(10, 22, 46, 0.94));",
+      "  border: 1px solid rgba(130, 192, 255, 0.32);",
+      "  backdrop-filter: blur(14px);",
+      "  color: #EAF3FF;",
+      "}",
+      ".hw-news-brand {",
+      "  color: #93C5FD;",
+      "  font-weight: 800;",
+      "}",
+      ".hw-news-headline {",
+      "  color: #F4F8FF;",
+      "  font-weight: 700;",
+      "}",
+      ".hw-news-meta {",
+      "  color: #9BB4D6;",
+      "}",
+      "",
+      COMMON_PSEUDO_HINT
+    ].join("\n"),
+
     couple_bills: [
       "/* === 共同账本默认 CSS（支持 ::before / ::after 伪元素） === */",
       ".hw-card {",
