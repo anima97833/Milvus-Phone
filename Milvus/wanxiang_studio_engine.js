@@ -58,6 +58,368 @@
       swatch: "#E8F1F5",
       me: { bg: "#557A8C", color: "#FFFFFF", radius: 20, border: "1px solid rgba(255,255,255,0.45)", shadow: "soft", opacity: 0.92 },
       them: { bg: "#FFFFFF", color: "#334155", radius: 20, border: "1px solid rgba(203,213,225,0.8)", shadow: "soft", opacity: 0.88 }
+    },
+    {
+      id: "hunmenggui",
+      name: "🔥 魂梦归",
+      swatch: "#4A1B28",
+      me: {
+        bg: "#211927",
+        color: "#ECC47F",
+        radius: 4,
+        border: "2px solid #784A36",
+        shadow: "strong",
+        opacity: 1,
+        customCss: `.msg-bubble.me {
+  position: relative !important;
+  overflow: visible !important;
+  background-color: #211927 !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 80' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='mistGrad' x1='0%25' y1='0%25' x2='0%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23ffffff' stop-opacity='0.25'/%3E%3Cstop offset='100%25' stop-color='%23ffffff' stop-opacity='0.02'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M-10,80 C35,42 75,72 125,48 C175,24 215,68 265,42 C288,30 305,48 310,80 Z' fill='url(%23mistGrad)'/%3E%3Cpath d='M-10,65 C40,25 75,70 120,45 C165,20 200,65 250,38 C280,22 305,45 320,35' fill='none' stroke='rgba(255,255,255,0.45)' stroke-width='1.5' stroke-linecap='round'/%3E%3Cpath d='M-10,75 C45,35 85,78 135,55 C185,32 225,72 275,48 T320,42' fill='none' stroke='rgba(255,255,255,0.25)' stroke-width='1.2' stroke-linecap='round'/%3E%3Cpath d='M0,58 C50,20 85,60 130,38 C175,16 215,58 260,32 C285,18 300,38 310,30' fill='none' stroke='rgba(255,255,255,0.18)' stroke-width='0.8' stroke-dasharray='4,2'/%3E%3C/svg%3E"), linear-gradient(180deg, #1B1E2D 0%, #2A1F30 48%, #4A1B28 100%) !important;
+  background-position: bottom center, center center !important;
+  background-repeat: no-repeat !important;
+  background-size: 100% 100%, cover !important;
+  border: 2px solid #784A36 !important;
+  border-radius: 4px !important;
+  box-shadow: inset 0 0 0 1px #A8714F, 0 3px 8px rgba(0, 0, 0, 0.45) !important;
+  color: #ECC47F !important;
+  text-shadow: 1px 1px 2px #100A15, 0 0 4px rgba(236, 196, 127, 0.35) !important;
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif !important;
+  font-weight: 600 !important;
+}
+.msg-bubble.me::before {
+  content: "" !important;
+  position: absolute !important;
+  top: -10px !important;
+  left: -15px !important;
+  width: 42px !important;
+  height: 53px !important;
+  pointer-events: none !important;
+  z-index: 3 !important;
+  background: url("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZZxJqhE9ouROKWjXtBzDp1MW4cjMpAQACZC8AArakIVQIQyMgRkulcz0E.png") no-repeat left center / contain !important;
+}
+.msg-bubble.me::after {
+  content: "" !important;
+  position: absolute !important;
+  top: -41px !important;
+  right: -10px !important;
+  width: 96px !important;
+  height: 114px !important;
+  pointer-events: none !important;
+  z-index: 3 !important;
+  background: url("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZZxRqhE-HaN32VMWP5dzFdm9k7NRnegACZi8AArakIVRE3HLoUmwueD0E.png") no-repeat right center / contain !important;
+}`
+      },
+      them: {
+        bg: "#211927",
+        color: "#FFFFFF",
+        radius: 4,
+        border: "2px solid #784A36",
+        shadow: "strong",
+        opacity: 1,
+        customCss: `.msg-bubble.them {
+  position: relative !important;
+  overflow: visible !important;
+  background-color: #211927 !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 80' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='mistGrad2' x1='0%25' y1='0%25' x2='0%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23ffffff' stop-opacity='0.25'/%3E%3Cstop offset='100%25' stop-color='%23ffffff' stop-opacity='0.02'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M-10,80 C35,42 75,72 125,48 C175,24 215,68 265,42 C288,30 305,48 310,80 Z' fill='url(%23mistGrad2)'/%3E%3Cpath d='M-10,65 C40,25 75,70 120,45 C165,20 200,65 250,38 C280,22 305,45 320,35' fill='none' stroke='rgba(255,255,255,0.45)' stroke-width='1.5' stroke-linecap='round'/%3E%3Cpath d='M-10,75 C45,35 85,78 135,55 C185,32 225,72 275,48 T320,42' fill='none' stroke='rgba(255,255,255,0.25)' stroke-width='1.2' stroke-linecap='round'/%3E%3Cpath d='M0,58 C50,20 85,60 130,38 C175,16 215,58 260,32 C285,18 300,38 310,30' fill='none' stroke='rgba(255,255,255,0.18)' stroke-width='0.8' stroke-dasharray='4,2'/%3E%3C/svg%3E"), linear-gradient(180deg, #1B1E2D 0%, #2A1F30 48%, #4A1B28 100%) !important;
+  background-position: bottom center, center center !important;
+  background-repeat: no-repeat !important;
+  background-size: 100% 100%, cover !important;
+  border: 2px solid #784A36 !important;
+  border-radius: 4px !important;
+  box-shadow: inset 0 0 0 1px #A8714F, 0 3px 8px rgba(0, 0, 0, 0.45) !important;
+  color: #FFFFFF !important;
+  text-shadow: 1px 1px 2px #100A15, 0 0 3px rgba(0, 0, 0, 0.6) !important;
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif !important;
+  font-weight: 600 !important;
+}
+.msg-bubble.them::before {
+  content: "" !important;
+  position: absolute !important;
+  top: -10px !important;
+  left: -15px !important;
+  width: 42px !important;
+  height: 53px !important;
+  pointer-events: none !important;
+  z-index: 3 !important;
+  background: url("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZZxJqhE9ouROKWjXtBzDp1MW4cjMpAQACZC8AArakIVQIQyMgRkulcz0E.png") no-repeat left center / contain !important;
+}
+.msg-bubble.them::after {
+  content: "" !important;
+  position: absolute !important;
+  top: -41px !important;
+  right: -10px !important;
+  width: 96px !important;
+  height: 114px !important;
+  pointer-events: none !important;
+  z-index: 3 !important;
+  background: url("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZZxRqhE-HaN32VMWP5dzFdm9k7NRnegACZi8AArakIVRE3HLoUmwueD0E.png") no-repeat right center / contain !important;
+}`
+      }
+    },
+    {
+      id: "yuan_official",
+      name: "🕊️ 鸢官方",
+      swatch: "#FFF7E6",
+      me: {
+        bg: "#FFF7E6",
+        color: "#3B241E",
+        radius: 12,
+        border: "2px solid #3B241E",
+        shadow: "soft",
+        opacity: 1,
+        customCss: `.msg-bubble.me {
+  position: relative !important;
+  overflow: visible !important;
+  background: #FFF7E6 !important;
+  border-radius: 12px !important;
+  border: 2px solid #3B241E !important;
+  color: #3B241E !important;
+  font-weight: 600 !important;
+  padding: 10px 24px 10px 16px !important;
+}
+.msg-bubble.me::before {
+  content: "" !important;
+  position: absolute !important;
+  top: -10px !important;
+  bottom: -8px !important;
+  left: -8px !important;
+  right: -8px !important;
+  pointer-events: none !important;
+  z-index: 3 !important;
+  background-image: url("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZZR1qhC0gVefWeQN9yD5zKjR7ymfjiQACJS0AArakIVSyf2EKEVZRZD0E.png"), url("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZZQlqhCyS8NOtjNkaEAKbaZFMUUJ5rwACDC0AArakIVR_imh2-n_YeD0E.png"), url("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZZRRqhCzBq9hQPWwdbBpdUUXZyReJEwACFy0AArakIVRAJEUAvbTDnj0E.png"), url("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZZRhqhCzvUrezomwJCjfhLAr0H0YQvAACHS0AArakIVT2DYsa_Xl_Rj0E.png") !important;
+  background-position: left top, right top, left bottom, right bottom !important;
+  background-repeat: no-repeat !important;
+  background-size: 26px auto, 32px auto, 18px auto, 13px auto !important;
+}`
+      },
+      them: {
+        bg: "#FFFFFF",
+        color: "#3B241E",
+        radius: 12,
+        border: "2px solid #3B241E",
+        shadow: "soft",
+        opacity: 1,
+        customCss: `.msg-bubble.them {
+  position: relative !important;
+  overflow: visible !important;
+  background: #FFFFFF !important;
+  border-radius: 12px !important;
+  border: 2px solid #3B241E !important;
+  color: #3B241E !important;
+  font-weight: 600 !important;
+  padding: 10px 24px 10px 16px !important;
+}
+.msg-bubble.them::before {
+  content: "" !important;
+  position: absolute !important;
+  top: -10px !important;
+  bottom: -8px !important;
+  left: -8px !important;
+  right: -8px !important;
+  pointer-events: none !important;
+  z-index: 3 !important;
+  background-image: url("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZZR1qhC0gVefWeQN9yD5zKjR7ymfjiQACJS0AArakIVSyf2EKEVZRZD0E.png"), url("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZZQlqhCyS8NOtjNkaEAKbaZFMUUJ5rwACDC0AArakIVR_imh2-n_YeD0E.png"), url("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZZRRqhCzBq9hQPWwdbBpdUUXZyReJEwACFy0AArakIVRAJEUAvbTDnj0E.png"), url("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZZRhqhCzvUrezomwJCjfhLAr0H0YQvAACHS0AArakIVT2DYsa_Xl_Rj0E.png") !important;
+  background-position: left top, right top, left bottom, right bottom !important;
+  background-repeat: no-repeat !important;
+  background-size: 26px auto, 32px auto, 18px auto, 13px auto !important;
+}`
+      }
+    },
+    {
+      id: "ao3_fm",
+      name: "🩸 AO3·FM",
+      swatch: "#7F0909",
+      me: {
+        bg: "#FFFFFF",
+        color: "#1A1A1A",
+        radius: 18,
+        border: "2px solid #7F0909",
+        shadow: "none",
+        opacity: 1,
+        customCss: `.msg-bubble.me {
+  position: relative !important;
+  overflow: visible !important;
+  background: #ffffff !important;
+  color: #1a1a1a !important;
+  border: 2px solid #7f0909 !important;
+  border-radius: 18px !important;
+  box-shadow: none !important;
+  padding: 12px 16px !important;
+}
+.msg-bubble.me::before {
+  content: "" !important;
+  position: absolute !important;
+  width: 24px !important;
+  height: 24px !important;
+  top: -10px !important;
+  left: -10px !important;
+  background-image: url("https://pic.82314912.xyz/api/cfile/AgACAgEAAyEGAATEcCnBAAJKAWpctu3QKzF1qMC0cOZ60PJ2neyUAAL0DGsbjITpRiOAyJO8n_yBAQADAgADbQADPQQ") !important;
+  background-size: contain !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  pointer-events: none !important;
+  z-index: 5 !important;
+}
+.msg-bubble.me::after {
+  content: "" !important;
+  position: absolute !important;
+  width: 24px !important;
+  height: 24px !important;
+  right: -10px !important;
+  bottom: -10px !important;
+  background-image: url("https://pic.82314912.xyz/api/cfile/AgACAgEAAyEGAATEcCnBAAJKAWpctu3QKzF1qMC0cOZ60PJ2neyUAAL0DGsbjITpRiOAyJO8n_yBAQADAgADbQADPQQ") !important;
+  background-size: contain !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  transform: scaleX(-1) !important;
+  pointer-events: none !important;
+  z-index: 5 !important;
+}`
+      },
+      them: {
+        bg: "#FFFFFF",
+        color: "#1A1A1A",
+        radius: 18,
+        border: "2px solid #7F0909",
+        shadow: "none",
+        opacity: 1,
+        customCss: `.msg-bubble.them {
+  position: relative !important;
+  overflow: visible !important;
+  background: #ffffff !important;
+  color: #1a1a1a !important;
+  border: 2px solid #7f0909 !important;
+  border-radius: 18px !important;
+  box-shadow: none !important;
+  padding: 12px 16px !important;
+}
+.msg-bubble.them::before {
+  content: "" !important;
+  position: absolute !important;
+  width: 24px !important;
+  height: 24px !important;
+  top: -10px !important;
+  left: -10px !important;
+  background-image: url("https://pic.82314912.xyz/api/cfile/AgACAgEAAyEGAATEcCnBAAJKAWpctu3QKzF1qMC0cOZ60PJ2neyUAAL0DGsbjITpRiOAyJO8n_yBAQADAgADbQADPQQ") !important;
+  background-size: contain !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  pointer-events: none !important;
+  z-index: 5 !important;
+}
+.msg-bubble.them::after {
+  content: "" !important;
+  position: absolute !important;
+  width: 24px !important;
+  height: 24px !important;
+  right: -10px !important;
+  bottom: -10px !important;
+  background-image: url("https://pic.82314912.xyz/api/cfile/AgACAgEAAyEGAATEcCnBAAJKAWpctu3QKzF1qMC0cOZ60PJ2neyUAAL0DGsbjITpRiOAyJO8n_yBAQADAgADbQADPQQ") !important;
+  background-size: contain !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  transform: scaleX(-1) !important;
+  pointer-events: none !important;
+  z-index: 5 !important;
+}`
+      }
+    },
+    {
+      id: "guihualianpian",
+      name: "🏮 诡话连篇",
+      swatch: "#482041",
+      me: {
+        bg: "#3C1B37",
+        color: "#E8CA83",
+        radius: 4,
+        border: "2px solid #8F393B",
+        shadow: "strong",
+        opacity: 1,
+        customCss: `.msg-bubble.me {
+  position: relative !important;
+  overflow: visible !important;
+  background-color: #3C1B37 !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 90' preserveAspectRatio='none'%3E%3Cpath d='M-5,90 C15,62 38,48 65,58 C85,66 78,85 52,90 Z' fill='rgba(195,100,145,0.28)'/%3E%3Cpath d='M-5,90 C18,68 38,55 60,65 C74,72 68,85 50,90' fill='none' stroke='rgba(235,145,185,0.45)' stroke-width='1.5'/%3E%3Cpath d='M-10,90 C10,55 40,40 70,52 C90,60 88,82 62,90' fill='none' stroke='rgba(255,190,215,0.3)' stroke-width='1'/%3E%3Cpath d='M180,90 C220,68 255,65 305,52 L305,90 Z' fill='rgba(180,85,135,0.22)'/%3E%3Cpath d='M150,90 C195,65 240,62 305,48' fill='none' stroke='rgba(230,135,178,0.45)' stroke-width='1.2'/%3E%3Cpath d='M180,90 C215,72 255,70 305,60' fill='none' stroke='rgba(255,185,210,0.32)' stroke-width='1'/%3E%3Cpath d='M130,90 C175,76 230,74 305,70' fill='none' stroke='rgba(195,95,145,0.35)' stroke-width='1'/%3E%3C/svg%3E"), radial-gradient(ellipse at 50% 25%, rgba(125, 58, 105, 0.45) 0%, rgba(0, 0, 0, 0) 75%), linear-gradient(180deg, #5C2D52 0%, #482041 55%, #341530 100%) !important;
+  background-position: bottom center, center top, center center !important;
+  background-repeat: no-repeat !important;
+  background-size: 100% 100%, 100% 100%, cover !important;
+  border: 2px solid #8F393B !important;
+  border-radius: 4px !important;
+  box-shadow: inset 0 0 0 1px #B86D48, inset 0 1px 2px rgba(255, 200, 150, 0.25), 0 3px 8px rgba(0, 0, 0, 0.45) !important;
+  color: #E8CA83 !important;
+  text-shadow: 1px 1px 2px #1E0A1B, 0 0 4px rgba(232, 202, 131, 0.4) !important;
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif !important;
+  font-weight: 600 !important;
+}
+.msg-bubble.me::before {
+  content: "" !important;
+  position: absolute !important;
+  top: -18px !important;
+  left: -20px !important;
+  width: 64px !important;
+  height: 78px !important;
+  pointer-events: none !important;
+  z-index: 3 !important;
+  background: url("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZZktqhD-LVuGFznbYxnqxbTMKGtVWmAAChi4AArakIVSaz8mAJybHiz0E.png") no-repeat left center / contain !important;
+}
+.msg-bubble.me::after {
+  content: "" !important;
+  position: absolute !important;
+  top: -30px !important;
+  right: -15px !important;
+  width: 90px !important;
+  height: 105px !important;
+  pointer-events: none !important;
+  z-index: 3 !important;
+  background: url("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZZk1qhD-hRsG9sIW2UInWJG3G29YsLgACiC4AArakIVQW67gnEs6DKt0E.png") no-repeat right center / contain !important;
+}`
+      },
+      them: {
+        bg: "#3C1B37",
+        color: "#FFFFFF",
+        radius: 4,
+        border: "2px solid #8F393B",
+        shadow: "strong",
+        opacity: 1,
+        customCss: `.msg-bubble.them {
+  position: relative !important;
+  overflow: visible !important;
+  background-color: #3C1B37 !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 90' preserveAspectRatio='none'%3E%3Cpath d='M-5,90 C15,62 38,48 65,58 C85,66 78,85 52,90 Z' fill='rgba(195,100,145,0.28)'/%3E%3Cpath d='M-5,90 C18,68 38,55 60,65 C74,72 68,85 50,90' fill='none' stroke='rgba(235,145,185,0.45)' stroke-width='1.5'/%3E%3Cpath d='M-10,90 C10,55 40,40 70,52 C90,60 88,82 62,90' fill='none' stroke='rgba(255,190,215,0.3)' stroke-width='1'/%3E%3Cpath d='M180,90 C220,68 255,65 305,52 L305,90 Z' fill='rgba(180,85,135,0.22)'/%3E%3Cpath d='M150,90 C195,65 240,62 305,48' fill='none' stroke='rgba(230,135,178,0.45)' stroke-width='1.2'/%3E%3Cpath d='M180,90 C215,72 255,70 305,60' fill='none' stroke='rgba(255,185,210,0.32)' stroke-width='1'/%3E%3Cpath d='M130,90 C175,76 230,74 305,70' fill='none' stroke='rgba(195,95,145,0.35)' stroke-width='1'/%3E%3C/svg%3E"), radial-gradient(ellipse at 50% 25%, rgba(125, 58, 105, 0.45) 0%, rgba(0, 0, 0, 0) 75%), linear-gradient(180deg, #5C2D52 0%, #482041 55%, #341530 100%) !important;
+  background-position: bottom center, center top, center center !important;
+  background-repeat: no-repeat !important;
+  background-size: 100% 100%, 100% 100%, cover !important;
+  border: 2px solid #8F393B !important;
+  border-radius: 4px !important;
+  box-shadow: inset 0 0 0 1px #B86D48, inset 0 1px 2px rgba(255, 200, 150, 0.25), 0 3px 8px rgba(0, 0, 0, 0.45) !important;
+  color: #FFFFFF !important;
+  text-shadow: 1px 1px 2px #1E0A1B, 0 0 3px rgba(0, 0, 0, 0.6) !important;
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif !important;
+  font-weight: 600 !important;
+}
+.msg-bubble.them::before {
+  content: "" !important;
+  position: absolute !important;
+  top: -18px !important;
+  left: -20px !important;
+  width: 64px !important;
+  height: 78px !important;
+  pointer-events: none !important;
+  z-index: 3 !important;
+  background: url("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZZktqhD-LVuGFznbYxnqxbTMKGtVWmAAChi4AArakIVSaz8mAJybHiz0E.png") no-repeat left center / contain !important;
+}
+.msg-bubble.them::after {
+  content: "" !important;
+  position: absolute !important;
+  top: -30px !important;
+  right: -15px !important;
+  width: 90px !important;
+  height: 105px !important;
+  pointer-events: none !important;
+  z-index: 3 !important;
+  background: url("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZZk1qhD-hRsG9sIW2UInWJG3G29YsLgACiC4AArakIVQW67gnEs6DKt0E.png") no-repeat right center / contain !important;
+}`
+      }
     }
   ];
 
@@ -86,6 +448,73 @@
       id: "star_orbit",
       name: "星轨微光",
       url: svgToDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><circle cx="60" cy="60" r="54" fill="none" stroke="#8C7AA9" stroke-width="2.2"/><ellipse cx="60" cy="60" rx="57" ry="22" transform="rotate(-28 60 60)" fill="none" stroke="#C5B4E3" stroke-width="1.6"/><circle cx="101" cy="30" r="4" fill="#F2D06B"/><circle cx="20" cy="88" r="2.6" fill="#C5B4E3"/></svg>`)
+    },
+    {
+      id: "sunce_peach",
+      name: "🌸 孙策·桃花",
+      url: "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZivdqhwgLamYI3Hwlm4JWs9o1H29XNwACLC4AAlXsOVShdjnRIvzO0j0E.png",
+      effect: "peach",
+      defaultScale: 1.36
+    },
+    {
+      id: "zuoci_snow",
+      name: "❄️ 左慈·飘雪",
+      url: "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZioRqhv5GmgvOPlllgZc2RqcJZYEAAYYAAo8tAAJV7DlU5PPf4lRuAa89BA.png",
+      effect: "snow",
+      defaultScale: 1.36
+    },
+    {
+      id: "zhangliao_snow",
+      name: "❄️ 张辽·飘雪",
+      url: "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZeqJqhcZ4H-oiwwoEefFQ8knwleq6rQACyyEAAlXsMVSjrLRHdON9lj0E.png",
+      effect: "snow",
+      defaultScale: 1.36
+    },
+    {
+      id: "zhangxiu_snow",
+      name: "❄️ 张绣·飘雪",
+      url: "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZef9qhbWKeoQf9K3DnJAAATLVJXcudIUAAhQhAAJV7DFUZlmhiPpqCB09BA.png",
+      effect: "snow",
+      defaultScale: 1.36
+    },
+    {
+      id: "yuanji_bamboo",
+      name: "🎋 袁基·竹叶",
+      url: "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZinFqhvzRGB4X8sM1hP2DVa5LV3hfBAACei0AAlXsOVRy5-29EaS0uz0E.png",
+      effect: "bamboo",
+      defaultScale: 1.36
+    },
+    {
+      id: "zhangfei_frame",
+      name: "⚔️ 张飞元素",
+      url: "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZeTZqhacoxsEpG0d0HDaU6KWkfsnoVgACOCAAAlXsMVQugsEzYsopLj0E.png",
+      defaultScale: 1.36
+    },
+    {
+      id: "taishanfu_1",
+      name: "🏮 泰山府·一",
+      url: "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZeKBqhZkq_K_mKMFJtPZc212oL7yFgwACdB8AAlXsMVQyj4ncSizygj0E.png",
+      defaultScale: 1.56
+    },
+    {
+      id: "taishanfu_2",
+      name: "🏮 泰山府·二",
+      url: "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZeOdqhZ3YfculLFrvwfiVDf3I-76uFwACzx8AAlXsMVSFk2Hd3AIa1D0E.png",
+      defaultScale: 1.56,
+      defaultX: 54
+    },
+    {
+      id: "love_laoyuan",
+      name: "🕊️ 爱你老鸢",
+      url: "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZes5qhcj-YEUS3AcneerU8sq_bP7UIAAC_CEAAlXsMVRkyvDjv2tbpj0E.png",
+      defaultScale: 1.44,
+      defaultY: 47
+    },
+    {
+      id: "liubian_frame",
+      name: "👑 刘辩元素",
+      url: "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZeAdqhYu-XJNRb9kshoXJIQztcpyaFwACyC8AArakKVS5wPgbxf8f-j0E.png",
+      defaultScale: 1.42
     }
   ];
 
@@ -362,6 +791,7 @@
         .map((part) => {
           const p = part.trim();
           if (!p) return "";
+          if (/^(?:from|to|\d+(?:\.\d+)?%)$/i.test(p)) return p;
           if (p.startsWith(scopeSelector)) return p;
           return `${scopeSelector} ${p}`;
         })
@@ -442,9 +872,10 @@
     if (draft.avatarFrame && draft.avatarFrame.enabled) {
       const af = draft.avatarFrame;
       let frameUrl = resolvedFrameUrl || "";
+      let builtinHit = null;
       if (!frameUrl && af.builtinId && af.builtinId !== "none") {
-        const hit = BUILTIN_AVATAR_FRAMES.find((f) => f.id === af.builtinId);
-        if (hit) frameUrl = hit.url;
+        builtinHit = BUILTIN_AVATAR_FRAMES.find((f) => f.id === af.builtinId) || null;
+        if (builtinHit) frameUrl = builtinHit.url;
       }
       const targetSelectors = [];
       if (af.target === "them" || af.target === "both") {
@@ -455,12 +886,77 @@
       }
       if (frameUrl && targetSelectors.length > 0) {
         const hostSel = targetSelectors.join(", ");
+        const beforeSel = targetSelectors.map((t) => `${t}::before`).join(", ");
         const afterSel = targetSelectors.map((t) => `${t}::after`).join(", ");
         const x = Number(af.x === undefined ? 50 : af.x);
         const y = Number(af.y === undefined ? 50 : af.y);
         const scale = Number(af.scale === undefined ? 1.24 : af.scale);
         const rotate = Number(af.rotate === undefined ? 0 : af.rotate);
-        parts.push(`${hostSel} { position: relative !important; overflow: visible !important; }`);
+        parts.push(`${hostSel} { position: relative !important; overflow: visible !important; z-index: 1 !important; }`);
+        if (builtinHit && builtinHit.effect === "peach") {
+          parts.push(`${beforeSel} {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: 50% !important;
+  pointer-events: none !important;
+  z-index: 5 !important;
+  overflow: hidden !important;
+  background-image:
+    radial-gradient(ellipse 1.6px 0.9px at 20% 20%, #ffb7c5 0%, #ff758f 65%, transparent 100%),
+    radial-gradient(ellipse 1.3px 0.7px at 75% 15%, #ffe5ec 0%, #ff8fa3 65%, transparent 100%),
+    radial-gradient(ellipse 1.8px 1.0px at 45% 65%, #ffa8ba 0%, #ff4d6d 65%, transparent 100%),
+    radial-gradient(ellipse 1.1px 1.5px at 85% 75%, #ffccd5 0%, #ff758f 65%, transparent 100%) !important;
+  background-size: 28px 28px, 34px 34px, 42px 42px, 30px 30px !important;
+  animation: wxAvatarPeachPetals 4.2s linear infinite !important;
+}
+@keyframes wxAvatarPeachPetals {
+  0% { background-position: 0px 0px, 0px 0px, 0px 0px, 0px 0px; }
+  100% { background-position: 14px 28px, -16px 34px, 20px 42px, -12px 30px; }
+}`);
+        } else if (builtinHit && builtinHit.effect === "snow") {
+          parts.push(`${beforeSel} {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: 50% !important;
+  pointer-events: none !important;
+  z-index: 5 !important;
+  overflow: hidden !important;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.9) 1px, transparent 2px),
+    radial-gradient(circle at 80% 10%, rgba(255, 255, 255, 0.7) 1px, transparent 2px),
+    radial-gradient(circle at 40% 70%, rgba(255, 255, 255, 0.85) 1.5px, transparent 2.5px),
+    radial-gradient(circle at 70% 50%, rgba(255, 255, 255, 0.6) 1px, transparent 2px) !important;
+  background-size: 30px 30px, 30px 30px, 50px 50px, 50px 50px !important;
+  animation: wxAvatarSnowFall 3.2s linear infinite !important;
+}
+@keyframes wxAvatarSnowFall {
+  0% { background-position: 0px 0px, 0px 0px, 0px 0px, 0px 0px; }
+  100% { background-position: 0px 30px, 0px 30px, 0px 50px, 0px 50px; }
+}`);
+        } else if (builtinHit && builtinHit.effect === "bamboo") {
+          parts.push(`${beforeSel} {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: 50% !important;
+  pointer-events: none !important;
+  z-index: 5 !important;
+  overflow: hidden !important;
+  background-image:
+    radial-gradient(ellipse 2.5px 0.8px at 20% 20%, #4a7c59 0%, #285430 75%, transparent 100%),
+    radial-gradient(ellipse 2px 0.6px at 75% 15%, #70a9a1 0%, #3e6b5c 75%, transparent 100%),
+    radial-gradient(ellipse 3.5px 1px at 45% 65%, #588157 0%, #344e41 75%, transparent 100%),
+    radial-gradient(ellipse 2.2px 0.7px at 85% 75%, #8cb369 0%, #436b35 75%, transparent 100%) !important;
+  background-size: 30px 30px, 35px 35px, 45px 45px, 32px 32px !important;
+  animation: wxAvatarBambooLeaves 4.5s linear infinite !important;
+}
+@keyframes wxAvatarBambooLeaves {
+  0% { background-position: 0px 0px, 0px 0px, 0px 0px, 0px 0px; }
+  100% { background-position: 18px 30px, -20px 35px, 25px 45px, -15px 32px; }
+}`);
+        }
         parts.push(`${afterSel} {
   content: "" !important;
   position: absolute !important;
@@ -1949,8 +2445,8 @@ title: 主题名称
                                 ...prev.bubble,
                                 presetId: p.id,
                                 enabled: true,
-                                me: { ...p.me, enabled: true, customCss: "" },
-                                them: { ...p.them, enabled: true, customCss: "" },
+                                me: { ...p.me, enabled: true, customCss: p.me.customCss || "" },
+                                them: { ...p.them, enabled: true, customCss: p.them.customCss || "" },
                                 customCss: ""
                               }
                             }));
@@ -2099,7 +2595,19 @@ title: 主题名称
                             type: "button",
                             onClick: () => {
                               setPreviewFrameUrl("");
-                              setDraft((p) => ({ ...p, avatarFrame: { ...p.avatarFrame, enabled: f.id !== "none", builtinId: f.id, blobId: "" } }));
+                              setDraft((p) => ({
+                                ...p,
+                                avatarFrame: {
+                                  ...p.avatarFrame,
+                                  enabled: f.id !== "none",
+                                  builtinId: f.id,
+                                  blobId: "",
+                                  x: f.defaultX !== undefined ? f.defaultX : 50,
+                                  y: f.defaultY !== undefined ? f.defaultY : 50,
+                                  scale: f.defaultScale !== undefined ? f.defaultScale : 1.24,
+                                  rotate: 0
+                                }
+                              }));
                             },
                             style: pillStyle(draft.avatarFrame.builtinId === f.id && !draft.avatarFrame.blobId)
                           },
