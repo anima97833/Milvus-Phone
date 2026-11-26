@@ -1850,6 +1850,16 @@
     return playTextForCharacter(text, charId, opts);
   }
 
+  async function autoSpeakIfEnabled(charId, text, opts = {}) {
+    await hydrate();
+    const vp = getCharVoiceProfile(charId);
+    if (!vp || !vp.autoPlay) return { skipped: true, reason: "auto_play_off" };
+    if (!hasVoiceForCharacter(charId)) return { skipped: true, reason: "no_voice" };
+    const cleanText = String(text || "").trim();
+    if (!cleanText) return { skipped: true, reason: "empty_text" };
+    return playTextForCharacter(cleanText, charId, opts);
+  }
+
   async function requestMicPermission() {
     try {
       if (typeof navigator === "undefined" || !navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
@@ -1956,6 +1966,7 @@
     synthesizeForCharacter,
     playTextForCharacter,
     speakForCharacter,
+    autoSpeakIfEnabled,
     stopPlayback,
     primeVoiceAudio,
     requestMicPermission,

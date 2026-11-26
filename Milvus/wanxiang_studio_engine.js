@@ -1197,9 +1197,13 @@ title: 主题名称
     const [legacyInfo, setLegacyInfo] = useState({ found: false, count: 0, combinedCss: "", keys: [] });
     const [cssUploadMode, setCssUploadMode] = useState("replace"); // replace | append
     const [cssSubTab, setCssSubTab] = useState("all"); // all | header | input | sendBtn
+    const [partPresetTitle, setPartPresetTitle] = useState("");
+    const [pendingDeletePreset, setPendingDeletePreset] = useState(null); // 防手滑删除确认态
     const fileInputRef = useRef(null);
     const packImportRef = useRef(null);
     const cssUploadRef = useRef(null);
+    const partCssUploadRef = useRef(null);
+    const partCssTargetScopeRef = useRef("bubble");
 
     const flash = (msg) => {
       setToast(msg);
@@ -1304,11 +1308,232 @@ title: 主题名称
     const handleSavePreset = async () => {
       const name = (presetTitle || "").trim() || `${charName}·万象搭配`;
       const id = "wx_preset_" + Date.now();
-      const rec = { id, title: name, draft, updatedAt: Date.now() };
+      const rec = { id, scope: "full", title: name, draft, updatedAt: Date.now() };
       await idbPut(STORE_PRESETS, rec);
       setPresets((prev) => [rec, ...prev]);
       setPresetTitle("");
       flash(`已存入万象库：「${name}」`);
+    };
+
+    const PART_SCOPE_META = {
+      bubble: { label: "气泡", defaultName: `${charName}·气泡预设` },
+      toolbar: { label: "工具栏", defaultName: `${charName}·工具栏预设` },
+      frame: { label: "头像框", defaultName: `${charName}·头像框预设` }
+    };
+
+    const handleSavePartPreset = async (scope, customTitle, overridePayload) => {
+      const meta = PART_SCOPE_META[scope];
+      if (!meta) return;
+      const name = String(customTitle !== undefined ? customTitle : partPresetTitle || "").trim() || meta.defaultName;
+      const payload = overridePayload !== undefined
+        ? overridePayload
+        : scope === "bubble"
+          ? JSON.parse(JSON.stringify(draft.bubble))
+          : scope === "toolbar"
+            ? JSON.parse(JSON.stringify(draft.toolbar))
+            : JSON.parse(JSON.stringify(draft.avatarFrame));
+      const rec = {
+        id: `wx_${scope}_preset_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        scope,
+        title: name,
+        payload,
+        updatedAt: Date.now()
+      };
+      await idbPut(STORE_PRESETS, rec);
+      setPresets((prev) => [rec, ...prev]);
+      if (customTitle === undefined) setPartPresetTitle("");
+      flash(`已存入 IndexedDB ${meta.label}预设：「${name}」 ✓`);
+      return rec;
+    };
+
+    const handleLoadPartPreset = async (item) => {
+      if (!item || !item.payload) return;
+      if (item.scope === "bubble") {
+        setDraft((prev) => ({
+          ...prev,
+          bubble: { ...createDefaultDraft().bubble, ...item.payload, enabled: true }
+        }));
+      } else if (item.scope === "toolbar") {
+        setDraft((prev) => ({
+          ...prev,
+          toolbar: { ...createDefaultDraft().toolbar, ...item.payload, enabled: true }
+        }));
+      } else if (item.scope === "frame") {
+        const nextFrame = { ...createDefaultDraft().avatarFrame, ...item.payload };
+        if (nextFrame.blobId) {
+          const b = await loadFrameBlob(nextFrame.blobId);
+          setPreviewFrameUrl(b ? URL.createObjectURL(b) : "");
+        } else {
+          setPreviewFrameUrl("");
+        }
+        setDraft((prev) => ({ ...prev, avatarFrame: nextFrame }));
+      }
+      flash(`已载入预设「${item.title}」，点右上角「应用」生效 ✓`);
+    };
+
+    const handleUploadPartCssFile = async (ev) => {
+      const file = ev.target.files && ev.target.files[0];
+      ev.target.value = "";
+      if (!file) return;
+      if (file.size > 512 * 1024) return flash("CSS 文件请控制在 512KB 以内");
+      const scope = partCssTargetScopeRef.current || "bubble";
+      const meta = PART_SCOPE_META[scope] || PART_SCOPE_META.bubble;
+      try {
+        const rawText = (await file.text()).trim();
+        if (!rawText) return flash("所选 CSS 文件为空");
+        const check = validateScopedCss(rawText.includes("{") ? rawText : `.wx-part { ${rawText} }`);
+        if (!check.ok) return flash("CSS 安全校验未通过：" + check.errors[0]);
+
+        const baseName = file.name.replace(/\.(css|txt|md)$/i, "").trim() || `${meta.label}导入样式`;
+        let nextPayload = null;
+        if (scope === "bubble") {
+          const nextBubble = {
+            ...draft.bubble,
+            enabled: true,
+            [bubbleSide]: {
+              ...(draft.bubble[bubbleSide] || {}),
+              enabled: true,
+              customCss: rawText
+            }
+          };
+          nextPayload = nextBubble;
+          setDraft((prev) => ({ ...prev, bubble: nextBubble }));
+        } else if (scope === "toolbar") {
+          const nextToolbar = { ...draft.toolbar, enabled: true, customCss: rawText };
+          nextPayload = nextToolbar;
+          setDraft((prev) => ({ ...prev, toolbar: nextToolbar }));
+        } else if (scope === "frame") {
+          const nextFrame = { ...draft.avatarFrame, enabled: true, customCss: rawText };
+          nextPayload = nextFrame;
+          setDraft((prev) => ({ ...prev, avatarFrame: nextFrame }));
+        }
+        // 导入后自动持久化到 IndexedDB 预设库
+        await handleSavePartPreset(scope, `${baseName}（CSS）`, nextPayload);
+      } catch (e) {
+        flash("导入 CSS 失败：" + (e && e.message ? e.message : "读取异常"));
+      }
+    };
+
+    const handleConfirmDeletePreset = async () => {
+      if (!pendingDeletePreset) return;
+      const target = pendingDeletePreset;
+      setPendingDeletePreset(null);
+      await idbDelete(STORE_PRESETS, target.id);
+      setPresets((prev) => prev.filter((p) => p.id !== target.id));
+      flash(`已删除预设「${target.title}」`);
+    };
+
+    const fullPresets = useMemo(
+      () => presets.filter((p) => !p.scope || p.scope === "full"),
+      [presets]
+    );
+
+    const renderPartPresetSection = (scope) => {
+      const meta = PART_SCOPE_META[scope];
+      const scopedList = presets.filter((p) => p.scope === scope);
+      return React.createElement(
+        "div",
+        {
+          style: {
+            background: "#FFF",
+            borderRadius: "14px",
+            border: "1px solid #E5DFD3",
+            padding: "12px",
+            display: "grid",
+            gap: "8px",
+            marginTop: "2px"
+          }
+        },
+        React.createElement(
+          "div",
+          { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", flexWrap: "wrap" } },
+          React.createElement("span", { style: { fontWeight: 600, fontSize: "12px", color: "#38342E" } }, `🗂️ ${meta.label}预设（IndexedDB）与 CSS 导入`),
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              onClick: () => {
+                partCssTargetScopeRef.current = scope;
+                if (partCssUploadRef.current) partCssUploadRef.current.click();
+              },
+              style: { ...pillStyle(false), padding: "4px 10px", fontSize: "11px" }
+            },
+            "📥 导入 .css 文件"
+          )
+        ),
+        React.createElement(
+          "div",
+          { style: { display: "flex", gap: "6px" } },
+          React.createElement("input", {
+            type: "text",
+            value: partPresetTitle,
+            placeholder: `命名当前${meta.label}预设（留空自动命名）...`,
+            onChange: (e) => setPartPresetTitle(e.target.value),
+            style: inputStyle
+          }),
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              onClick: () => handleSavePartPreset(scope),
+              style: { ...pillStyle(true), padding: "6px 12px", fontSize: "11.5px" }
+            },
+            "存为预设"
+          )
+        ),
+        scopedList.length === 0
+          ? React.createElement("div", { style: { fontSize: "11px", color: "#9C9486", padding: "4px 2px" } }, `暂无已保存的${meta.label}预设；导入 CSS 文件后也会自动存入此处`)
+          : React.createElement(
+              "div",
+              { style: { display: "grid", gap: "6px", maxHeight: "160px", overflowY: "auto" } },
+              scopedList.map((item) =>
+                React.createElement(
+                  "div",
+                  {
+                    key: item.id,
+                    style: {
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "8px",
+                      padding: "7px 10px",
+                      borderRadius: "10px",
+                      background: "#FAF8F4",
+                      border: "1px solid #ECE6DA"
+                    }
+                  },
+                  React.createElement(
+                    "div",
+                    { style: { minWidth: 0, flex: 1 } },
+                    React.createElement("div", { style: { fontSize: "12px", fontWeight: 600, color: "#38342E", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, item.title),
+                    React.createElement("div", { style: { fontSize: "10px", color: "#8C8577" } }, new Date(item.updatedAt || Date.now()).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }))
+                  ),
+                  React.createElement(
+                    "div",
+                    { style: { display: "flex", gap: "5px", flexShrink: 0 } },
+                    React.createElement(
+                      "button",
+                      {
+                        type: "button",
+                        onClick: () => handleLoadPartPreset(item),
+                        style: { ...pillStyle(true), padding: "3px 9px", fontSize: "11px" }
+                      },
+                      "载入"
+                    ),
+                    React.createElement(
+                      "button",
+                      {
+                        type: "button",
+                        onClick: () => setPendingDeletePreset(item),
+                        style: { ...pillStyle(false), padding: "3px 8px", fontSize: "11px", color: "#B54534", borderColor: "#E5C6C0" }
+                      },
+                      "删除"
+                    )
+                  )
+                )
+              )
+            )
+      );
     };
 
     const handleExportPack = async () => {
@@ -1602,10 +1827,10 @@ title: 主题名称
               ),
               React.createElement("input", { ref: packImportRef, type: "file", accept: ".json,application/json", style: { display: "none" }, onChange: handleImportPack })
             ),
-            React.createElement("div", { style: { fontSize: "11.5px", color: "#888072", marginBottom: "6px" } }, `已收藏的万象搭配（${presets.length}）`),
-            presets.length === 0
+            React.createElement("div", { style: { fontSize: "11.5px", color: "#888072", marginBottom: "6px" } }, `已收藏的整套万象搭配（${fullPresets.length}）`),
+            fullPresets.length === 0
               ? React.createElement("div", { style: { textAlign: "center", color: "#9C9486", padding: "24px 0", fontSize: "12px" } }, "暂无收藏，调好喜欢的风格后点上方「保存」即可")
-              : presets.map((item) =>
+              : fullPresets.map((item) =>
                   React.createElement(
                     "div",
                     {
@@ -1642,10 +1867,7 @@ title: 主题名称
                         "button",
                         {
                           type: "button",
-                          onClick: async () => {
-                            await idbDelete(STORE_PRESETS, item.id);
-                            setPresets((prev) => prev.filter((p) => p.id !== item.id));
-                          },
+                          onClick: () => setPendingDeletePreset(item),
                           style: { ...pillStyle(false), padding: "4px 9px", fontSize: "11px", color: "#B54534" }
                         },
                         "删除"
@@ -1802,128 +2024,139 @@ title: 主题名称
                         style: { ...inputStyle, marginTop: "6px", fontFamily: "monospace" }
                       })
                     )
-                  )
+                  ),
+                  renderPartPresetSection("bubble")
                 ),
               tab === "toolbar" &&
                 React.createElement(
                   "div",
-                  { style: { background: "#FFF", borderRadius: "14px", border: "1px solid #E5DFD3", padding: "12px", display: "grid", gap: "10px", fontSize: "12px" } },
+                  { style: { display: "flex", flexDirection: "column", gap: "10px" } },
                   React.createElement(
                     "div",
-                    { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" } },
-                    React.createElement("label", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } }, "底色", React.createElement("input", { type: "color", value: draft.toolbar.bg || "#FAF8F3", onChange: (e) => setDraft((p) => ({ ...p, toolbar: { ...p.toolbar, enabled: true, bg: e.target.value } })) })),
-                    React.createElement("label", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } }, "图标色", React.createElement("input", { type: "color", value: draft.toolbar.iconColor || "#5E6756", onChange: (e) => setDraft((p) => ({ ...p, toolbar: { ...p.toolbar, enabled: true, iconColor: e.target.value } })) }))
+                    { style: { background: "#FFF", borderRadius: "14px", border: "1px solid #E5DFD3", padding: "12px", display: "grid", gap: "10px", fontSize: "12px" } },
+                    React.createElement(
+                      "div",
+                      { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" } },
+                      React.createElement("label", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } }, "底色", React.createElement("input", { type: "color", value: draft.toolbar.bg || "#FAF8F3", onChange: (e) => setDraft((p) => ({ ...p, toolbar: { ...p.toolbar, enabled: true, bg: e.target.value } })) })),
+                      React.createElement("label", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } }, "图标色", React.createElement("input", { type: "color", value: draft.toolbar.iconColor || "#5E6756", onChange: (e) => setDraft((p) => ({ ...p, toolbar: { ...p.toolbar, enabled: true, iconColor: e.target.value } })) }))
+                    ),
+                    React.createElement(
+                      "label",
+                      { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" } },
+                      `透明度 ${Math.round(Number(draft.toolbar.opacity || 0.92) * 100)}%`,
+                      React.createElement("input", { type: "range", min: 0.35, max: 1, step: 0.02, value: Number(draft.toolbar.opacity || 0.92), onChange: (e) => setDraft((p) => ({ ...p, toolbar: { ...p.toolbar, enabled: true, opacity: Number(e.target.value) } })), style: { flex: 1 } })
+                    ),
+                    React.createElement(
+                      "label",
+                      { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" } },
+                      `毛玻璃 ${Number(draft.toolbar.blur || 12)}px`,
+                      React.createElement("input", { type: "range", min: 0, max: 24, value: Number(draft.toolbar.blur || 12), onChange: (e) => setDraft((p) => ({ ...p, toolbar: { ...p.toolbar, enabled: true, blur: Number(e.target.value) } })), style: { flex: 1 } })
+                    ),
+                    React.createElement(
+                      "label",
+                      { style: { display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" } },
+                      React.createElement("input", { type: "checkbox", checked: !!draft.toolbar.floating, onChange: (e) => setDraft((p) => ({ ...p, toolbar: { ...p.toolbar, enabled: true, floating: e.target.checked } })) }),
+                      "悬浮圆角胶囊工具栏"
+                    ),
+                    React.createElement(
+                      "details",
+                      null,
+                      React.createElement("summary", { style: { fontSize: "11.5px", color: "#7B7468", cursor: "pointer" } }, "进阶工具栏自定义 CSS（可选）"),
+                      React.createElement("textarea", {
+                        rows: 3,
+                        value: draft.toolbar.customCss || "",
+                        placeholder: ".chat-toolbar { box-shadow: inset 0 1px 0 rgba(255,255,255,0.6) !important; }",
+                        onChange: (e) => setDraft((p) => ({ ...p, toolbar: { ...p.toolbar, enabled: true, customCss: e.target.value } })),
+                        style: { ...inputStyle, marginTop: "6px", fontFamily: "monospace" }
+                      })
+                    )
                   ),
-                  React.createElement(
-                    "label",
-                    { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" } },
-                    `透明度 ${Math.round(Number(draft.toolbar.opacity || 0.92) * 100)}%`,
-                    React.createElement("input", { type: "range", min: 0.35, max: 1, step: 0.02, value: Number(draft.toolbar.opacity || 0.92), onChange: (e) => setDraft((p) => ({ ...p, toolbar: { ...p.toolbar, enabled: true, opacity: Number(e.target.value) } })), style: { flex: 1 } })
-                  ),
-                  React.createElement(
-                    "label",
-                    { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" } },
-                    `毛玻璃 ${Number(draft.toolbar.blur || 12)}px`,
-                    React.createElement("input", { type: "range", min: 0, max: 24, value: Number(draft.toolbar.blur || 12), onChange: (e) => setDraft((p) => ({ ...p, toolbar: { ...p.toolbar, enabled: true, blur: Number(e.target.value) } })), style: { flex: 1 } })
-                  ),
-                  React.createElement(
-                    "label",
-                    { style: { display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" } },
-                    React.createElement("input", { type: "checkbox", checked: !!draft.toolbar.floating, onChange: (e) => setDraft((p) => ({ ...p, toolbar: { ...p.toolbar, enabled: true, floating: e.target.checked } })) }),
-                    "悬浮圆角胶囊工具栏"
-                  ),
-                  React.createElement(
-                    "details",
-                    null,
-                    React.createElement("summary", { style: { fontSize: "11.5px", color: "#7B7468", cursor: "pointer" } }, "进阶工具栏自定义 CSS（可选）"),
-                    React.createElement("textarea", {
-                      rows: 3,
-                      value: draft.toolbar.customCss || "",
-                      placeholder: ".chat-toolbar { box-shadow: inset 0 1px 0 rgba(255,255,255,0.6) !important; }",
-                      onChange: (e) => setDraft((p) => ({ ...p, toolbar: { ...p.toolbar, enabled: true, customCss: e.target.value } })),
-                      style: { ...inputStyle, marginTop: "6px", fontFamily: "monospace" }
-                    })
-                  )
+                  renderPartPresetSection("toolbar")
                 ),
               tab === "frame" &&
                 React.createElement(
                   "div",
-                  { style: { background: "#FFF", borderRadius: "14px", border: "1px solid #E5DFD3", padding: "12px", display: "grid", gap: "10px", fontSize: "12px" } },
+                  { style: { display: "flex", flexDirection: "column", gap: "10px" } },
                   React.createElement(
                     "div",
-                    { style: { display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" } },
-                    "佩戴对象：",
-                    [["both", "双方"], ["them", charName], ["me", "仅我"]].map(([id, lb]) =>
-                      React.createElement("button", { key: id, type: "button", onClick: () => setDraft((p) => ({ ...p, avatarFrame: { ...p.avatarFrame, target: id } })), style: { ...pillStyle(draft.avatarFrame.target === id), padding: "3px 10px", fontSize: "11px" } }, lb)
-                    )
-                  ),
-                  React.createElement(
-                    "div",
-                    { style: { display: "flex", gap: "6px", flexWrap: "wrap" } },
-                    BUILTIN_AVATAR_FRAMES.map((f) =>
-                      React.createElement(
-                        "button",
-                        {
-                          key: f.id,
-                          type: "button",
-                          onClick: () => {
-                            setPreviewFrameUrl("");
-                            setDraft((p) => ({ ...p, avatarFrame: { ...p.avatarFrame, enabled: f.id !== "none", builtinId: f.id, blobId: "" } }));
-                          },
-                          style: pillStyle(draft.avatarFrame.builtinId === f.id && !draft.avatarFrame.blobId)
-                        },
-                        f.name
-                      )
-                    )
-                  ),
-                  React.createElement(
-                    "div",
-                    null,
-                    React.createElement("button", { type: "button", onClick: () => fileInputRef.current && fileInputRef.current.click(), style: pillStyle(!!draft.avatarFrame.blobId) }, "📤 上传透明头像框 (PNG / WebP / GIF)"),
-                    React.createElement("input", { ref: fileInputRef, type: "file", accept: "image/*", style: { display: "none" }, onChange: handleUploadFrame })
-                  ),
-                  draft.avatarFrame.enabled &&
+                    { style: { background: "#FFF", borderRadius: "14px", border: "1px solid #E5DFD3", padding: "12px", display: "grid", gap: "10px", fontSize: "12px" } },
                     React.createElement(
                       "div",
-                      { style: { display: "grid", gap: "8px", paddingTop: "4px", borderTop: "1px solid #EFEAE0" } },
-                      [
-                        ["x", "左右位置", 20, 80, 1],
-                        ["y", "上下位置", 20, 80, 1],
-                        ["scale", "缩放比例", 0.8, 2.0, 0.02],
-                        ["rotate", "旋转角度", -180, 180, 2]
-                      ].map(([key, label, min, max, step]) =>
+                      { style: { display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" } },
+                      "佩戴对象：",
+                      [["both", "双方"], ["them", charName], ["me", "仅我"]].map(([id, lb]) =>
+                        React.createElement("button", { key: id, type: "button", onClick: () => setDraft((p) => ({ ...p, avatarFrame: { ...p.avatarFrame, target: id } })), style: { ...pillStyle(draft.avatarFrame.target === id), padding: "3px 10px", fontSize: "11px" } }, lb)
+                      )
+                    ),
+                    React.createElement(
+                      "div",
+                      { style: { display: "flex", gap: "6px", flexWrap: "wrap" } },
+                      BUILTIN_AVATAR_FRAMES.map((f) =>
                         React.createElement(
-                          "label",
-                          { key, style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" } },
-                          `${label} ${draft.avatarFrame[key]}`,
-                          React.createElement("input", {
-                            type: "range",
-                            min,
-                            max,
-                            step,
-                            value: Number(draft.avatarFrame[key]),
-                            onChange: (e) => setDraft((p) => ({ ...p, avatarFrame: { ...p.avatarFrame, [key]: Number(e.target.value) } })),
-                            style: { flex: 1 }
-                          })
+                          "button",
+                          {
+                            key: f.id,
+                            type: "button",
+                            onClick: () => {
+                              setPreviewFrameUrl("");
+                              setDraft((p) => ({ ...p, avatarFrame: { ...p.avatarFrame, enabled: f.id !== "none", builtinId: f.id, blobId: "" } }));
+                            },
+                            style: pillStyle(draft.avatarFrame.builtinId === f.id && !draft.avatarFrame.blobId)
+                          },
+                          f.name
                         )
                       )
                     ),
-                  React.createElement(
-                    "details",
-                    null,
-                    React.createElement("summary", { style: { fontSize: "11.5px", color: "#7B7468", cursor: "pointer" } }, `进阶头像框自定义 CSS（当前对象：${draft.avatarFrame.target === "them" ? charName : draft.avatarFrame.target === "me" ? "仅我" : "双方"}）`),
-                    React.createElement("textarea", {
-                      rows: 3,
-                      value: draft.avatarFrame.customCss || "",
-                      placeholder: draft.avatarFrame.target === "them"
-                        ? ".role-avatar { border: 2px solid #D4AF37 !important; box-shadow: 0 0 10px rgba(212,175,55,0.45) !important; }"
-                        : draft.avatarFrame.target === "me"
-                        ? ".user-avatar { border: 2px solid #D4AF37 !important; box-shadow: 0 0 10px rgba(212,175,55,0.45) !important; }"
-                        : ".role-avatar, .user-avatar { border: 2px solid #D4AF37 !important; box-shadow: 0 0 10px rgba(212,175,55,0.45) !important; }",
-                      onChange: (e) => setDraft((p) => ({ ...p, avatarFrame: { ...p.avatarFrame, enabled: true, customCss: e.target.value } })),
-                      style: { ...inputStyle, marginTop: "6px", fontFamily: "monospace" }
-                    })
-                  )
+                    React.createElement(
+                      "div",
+                      null,
+                      React.createElement("button", { type: "button", onClick: () => fileInputRef.current && fileInputRef.current.click(), style: pillStyle(!!draft.avatarFrame.blobId) }, "📤 上传透明头像框 (PNG / WebP / GIF)"),
+                      React.createElement("input", { ref: fileInputRef, type: "file", accept: "image/*", style: { display: "none" }, onChange: handleUploadFrame })
+                    ),
+                    draft.avatarFrame.enabled &&
+                      React.createElement(
+                        "div",
+                        { style: { display: "grid", gap: "8px", paddingTop: "4px", borderTop: "1px solid #EFEAE0" } },
+                        [
+                          ["x", "左右位置", 20, 80, 1],
+                          ["y", "上下位置", 20, 80, 1],
+                          ["scale", "缩放比例", 0.8, 2.0, 0.02],
+                          ["rotate", "旋转角度", -180, 180, 2]
+                        ].map(([key, label, min, max, step]) =>
+                          React.createElement(
+                            "label",
+                            { key, style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" } },
+                            `${label} ${draft.avatarFrame[key]}`,
+                            React.createElement("input", {
+                              type: "range",
+                              min,
+                              max,
+                              step,
+                              value: Number(draft.avatarFrame[key]),
+                              onChange: (e) => setDraft((p) => ({ ...p, avatarFrame: { ...p.avatarFrame, [key]: Number(e.target.value) } })),
+                              style: { flex: 1 }
+                            })
+                          )
+                        )
+                      ),
+                    React.createElement(
+                      "details",
+                      null,
+                      React.createElement("summary", { style: { fontSize: "11.5px", color: "#7B7468", cursor: "pointer" } }, `进阶头像框自定义 CSS（当前对象：${draft.avatarFrame.target === "them" ? charName : draft.avatarFrame.target === "me" ? "仅我" : "双方"}）`),
+                      React.createElement("textarea", {
+                        rows: 3,
+                        value: draft.avatarFrame.customCss || "",
+                        placeholder: draft.avatarFrame.target === "them"
+                          ? ".role-avatar { border: 2px solid #D4AF37 !important; box-shadow: 0 0 10px rgba(212,175,55,0.45) !important; }"
+                          : draft.avatarFrame.target === "me"
+                          ? ".user-avatar { border: 2px solid #D4AF37 !important; box-shadow: 0 0 10px rgba(212,175,55,0.45) !important; }"
+                          : ".role-avatar, .user-avatar { border: 2px solid #D4AF37 !important; box-shadow: 0 0 10px rgba(212,175,55,0.45) !important; }",
+                        onChange: (e) => setDraft((p) => ({ ...p, avatarFrame: { ...p.avatarFrame, enabled: true, customCss: e.target.value } })),
+                        style: { ...inputStyle, marginTop: "6px", fontFamily: "monospace" }
+                      })
+                    )
+                  ),
+                  renderPartPresetSection("frame")
                 ),
               tab === "css" &&
                 React.createElement(
@@ -2164,7 +2397,83 @@ title: 主题名称
                   )
                 )
             )
+          ),
+      // 分板块隐藏 CSS 文件选择器
+      React.createElement("input", {
+        ref: partCssUploadRef,
+        type: "file",
+        accept: ".css,.txt,.md,text/css,text/plain",
+        style: { display: "none" },
+        onChange: handleUploadPartCssFile
+      }),
+      // 删除预设防手滑二次确认弹窗
+      pendingDeletePreset &&
+        React.createElement(
+          "div",
+          {
+            onClick: () => setPendingDeletePreset(null),
+            style: {
+              position: "fixed",
+              inset: 0,
+              zIndex: 100020,
+              background: "rgba(32, 26, 22, 0.45)",
+              backdropFilter: "blur(3px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "20px"
+            }
+          },
+          React.createElement(
+            "div",
+            {
+              onClick: (e) => e.stopPropagation(),
+              style: {
+                width: "100%",
+                maxWidth: "310px",
+                background: "#FFFDF9",
+                borderRadius: "16px",
+                border: "1px solid #E5DFD3",
+                boxShadow: "0 14px 36px rgba(32, 26, 22, 0.22)",
+                padding: "16px"
+              }
+            },
+            React.createElement("div", { style: { fontSize: "14px", fontWeight: 700, color: "#38342E", marginBottom: "6px" } }, "⚠️ 确认删除预设？"),
+            React.createElement(
+              "div",
+              { style: { fontSize: "12px", color: "#6E675C", lineHeight: 1.6, marginBottom: "14px" } },
+              `确定要从 IndexedDB 永久删除「${pendingDeletePreset.title}」吗？删除后无法恢复（防手滑提醒）。`
+            ),
+            React.createElement(
+              "div",
+              { style: { display: "flex", justifyContent: "flex-end", gap: "8px" } },
+              React.createElement(
+                "button",
+                {
+                  type: "button",
+                  onClick: () => setPendingDeletePreset(null),
+                  style: { ...pillStyle(false), padding: "6px 14px", fontSize: "12px" }
+                },
+                "取消"
+              ),
+              React.createElement(
+                "button",
+                {
+                  type: "button",
+                  onClick: handleConfirmDeletePreset,
+                  style: {
+                    ...pillStyle(true),
+                    background: "#B54534",
+                    borderColor: "#B54534",
+                    padding: "6px 14px",
+                    fontSize: "12px"
+                  }
+                },
+                "确认删除"
+              )
+            )
           )
+        )
     );
 
     if (ReactDOM && typeof ReactDOM.createPortal === "function" && global.document && global.document.body) {

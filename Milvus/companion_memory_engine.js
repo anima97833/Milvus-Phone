@@ -467,6 +467,77 @@
     return list;
   }
 
+  // ==========================================
+  // 2.5 全屏顶部横幅提示（透明告知用户伴侣分层记忆正在调用 AI）
+  // ==========================================
+  let _bannerHideTimer = null;
+  function showMemoryAiBanner(title, detail, state = "loading") {
+    try {
+      if (typeof document === "undefined" || !document.body) return;
+      if (_bannerHideTimer) {
+        clearTimeout(_bannerHideTimer);
+        _bannerHideTimer = null;
+      }
+      let el = document.getElementById("milvus-companion-memory-ai-banner");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "milvus-companion-memory-ai-banner";
+        el.style.cssText = [
+          "position:fixed",
+          "top:max(12px, env(safe-area-inset-top))",
+          "left:50%",
+          "transform:translateX(-50%) translateY(-16px)",
+          "z-index:999999",
+          "width:min(92vw, 420px)",
+          "padding:10px 14px",
+          "border-radius:14px",
+          "backdrop-filter:blur(12px)",
+          "-webkit-backdrop-filter:blur(12px)",
+          "box-shadow:0 10px 28px rgba(38,28,22,0.22)",
+          "display:flex",
+          "align-items:center",
+          "gap:10px",
+          "font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans SC',sans-serif",
+          "transition:opacity 0.25s ease, transform 0.25s ease",
+          "pointer-events:none",
+          "opacity:0"
+        ].join(";");
+        document.body.appendChild(el);
+      }
+
+      const palette = state === "done"
+        ? { bg: "rgba(44, 78, 56, 0.94)", border: "1px solid rgba(163, 217, 179, 0.45)", icon: "✅" }
+        : state === "error"
+          ? { bg: "rgba(128, 42, 34, 0.94)", border: "1px solid rgba(255, 178, 168, 0.45)", icon: "⚠️" }
+          : { bg: "rgba(46, 39, 35, 0.94)", border: "1px solid rgba(226, 198, 152, 0.48)", icon: "🧠" };
+
+      el.style.background = palette.bg;
+      el.style.border = palette.border;
+      el.style.color = "#fffaf2";
+
+      const safeTitle = String(title || "伴侣分层记忆 · 调用 AI").replace(/</g, "&lt;");
+      const safeDetail = String(detail || "").replace(/</g, "&lt;");
+      el.innerHTML =
+        `<div style="font-size:18px;line-height:1;flex-shrink:0;">${palette.icon}</div>` +
+        `<div style="flex:1;min-width:0;">` +
+          `<div style="font-size:12px;font-weight:700;letter-spacing:0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${safeTitle}</div>` +
+          (safeDetail ? `<div style="font-size:11px;opacity:0.86;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${safeDetail}</div>` : "") +
+        `</div>`;
+
+      requestAnimationFrame(() => {
+        el.style.opacity = "1";
+        el.style.transform = "translateX(-50%) translateY(0)";
+      });
+
+      if (state === "done" || state === "error") {
+        _bannerHideTimer = setTimeout(() => {
+          el.style.opacity = "0";
+          el.style.transform = "translateX(-50%) translateY(-16px)";
+        }, state === "error" ? 3200 : 2400);
+      }
+    } catch (_) {}
+  }
+
   async function folioCompressOnce(charId, rawMessages, names, opts = {}) {
     const capsules = await getCapsules(charId);
     const maxCoveredId = capsules.reduce((mx, c) => Math.max(mx, Number(c.lastMsgId) || 0), 0);
@@ -503,19 +574,36 @@
       content: m.content
     }));
 
-    const text = (
-      await callMainLlmText(
-        [
-          { role: "system", content: buildFolioPrompt(names) },
-          { role: "user", content: JSON.stringify(rows) }
-        ],
-        { temperature: 0, customChatFn: opts.customChatFn }
-      )
-    ).trim();
+    showMemoryAiBanner(
+      "伴侣分层记忆 · 正在调用 AI 总结",
+      `「记忆胶囊」正在归纳与 ${names.assistant || "名士"} 的 ${flat.length} 条对话…`,
+      "loading"
+    );
+    let text = "";
+    try {
+      text = (
+        await callMainLlmText(
+          [
+            { role: "system", content: buildFolioPrompt(names) },
+            { role: "user", content: JSON.stringify(rows) }
+          ],
+          { temperature: 0, customChatFn: opts.customChatFn }
+        )
+      ).trim();
+    } catch (err) {
+      showMemoryAiBanner("伴侣分层记忆 · 总结调用失败", err?.message || "请检查 API 配置", "error");
+      throw err;
+    }
 
     if (!text || text[0] === "{" || text[0] === "[") {
+      showMemoryAiBanner("伴侣分层记忆 · 摘要格式异常", "已跳过本次胶囊写入", "error");
       throw new Error("Folio 只收纯文本摘要，拒绝异常 JSON 输出");
     }
+    showMemoryAiBanner(
+      "伴侣分层记忆 · 记忆胶囊归纳完成",
+      `已归档与 ${names.assistant || "名士"} 的 ${flat.length} 条对话记忆`,
+      "done"
+    );
 
     const record = {
       id: `cap_${charId}_${flat[flat.length - 1].id}_${Date.now()}`,
@@ -623,15 +711,31 @@
 - 如果没有值得记的内容，只回一个字：无。
 只写正文，不要 JSON，不要标题。`;
 
-      const reply = (
-        await callMainLlmText(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: `<原始对话>\n${transcript}\n</原始对话>\n请按要求总结以上对话，严禁接着往下写。` }
-          ],
-          { temperature: 0, customChatFn: opts.customChatFn }
-        )
-      ).trim();
+      showMemoryAiBanner(
+        "伴侣分层记忆 · 正在调用 AI 生成日总结",
+        `正在归纳 ${names.assistant || "名士"} ${dayStr} 第 ${segNo}/${segs.length} 段对话…`,
+        "loading"
+      );
+      let reply = "";
+      try {
+        reply = (
+          await callMainLlmText(
+            [
+              { role: "system", content: sysPrompt },
+              { role: "user", content: `<原始对话>\n${transcript}\n</原始对话>\n请按要求总结以上对话，严禁接着往下写。` }
+            ],
+            { temperature: 0, customChatFn: opts.customChatFn }
+          )
+        ).trim();
+      } catch (err) {
+        showMemoryAiBanner("伴侣分层记忆 · 日总结调用失败", err?.message || "请检查 API 配置", "error");
+        throw err;
+      }
+      showMemoryAiBanner(
+        "伴侣分层记忆 · 分段日总结完成",
+        `已完成 ${names.assistant || "名士"} ${dayStr} 第 ${segNo}/${segs.length} 段归纳`,
+        "done"
+      );
 
       if (!reply || reply === "无" || reply === "无。") continue;
 
@@ -786,6 +890,11 @@
 
     let picks = null;
     try {
+      showMemoryAiBanner(
+        "伴侣分层记忆 · 正在调用 AI 检索记忆",
+        `「记忆挑选器」正在从 ${pool.length} 条历史摘要中筛选关联记忆…`,
+        "loading"
+      );
       const reply = await callPickerLlmText(
         [
           { role: "system", content: sysPrompt },
@@ -794,8 +903,14 @@
         { temperature: 0, max_tokens: 60, customChatFn }
       );
       picks = parsePickIndices(reply, pool.length);
+      showMemoryAiBanner(
+        "伴侣分层记忆 · 记忆检索完成",
+        picks && picks.length > 0 ? `已唤醒 ${picks.length} 条相关旧记忆` : "当前话题无关联旧记忆",
+        "done"
+      );
     } catch (e) {
       picks = null;
+      showMemoryAiBanner("伴侣分层记忆 · 记忆检索失败", "已跳过旧记忆注入", "error");
     }
 
     if (picks === null) {
