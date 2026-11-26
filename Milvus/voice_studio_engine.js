@@ -31,10 +31,21 @@
     minimaxRegion: "domestic", // "domestic" | "overseas"
     minimaxModel: "speech-2.8-hd",
     elevenLabsApiKey: "",
-    elevenLabsModel: "eleven_v3"
+    elevenLabsModel: "eleven_v3",
+    builtinFallbackEnabled: false,
+    defaultBuiltinMode: "animalese",
+    defaultBuiltinPresetId: "scholar-warm",
+    defaultBuiltinWebVoiceURI: "",
+    defaultBuiltinTuning: null
   };
 
   const DEFAULT_CHAR_VOICE = {
+    voiceSource: "clone", // "clone" | "builtin"
+    builtinMode: "animalese",
+    builtinPresetId: "scholar-warm",
+    builtinWebVoiceURI: "",
+    builtinPitch: 1.0,
+    builtinTuning: null,
     fishReferenceId: "",
     minimaxVoiceId: "",
     elevenLabsVoiceId: "",
@@ -421,6 +432,14 @@
     return { ...DEFAULT_CHAR_VOICE, ...(_charVoicesCache[key] || {}), charId: key };
   }
 
+  function getAllCharVoices() {
+    const out = {};
+    Object.keys(_charVoicesCache || {}).forEach((k) => {
+      out[k] = { ...DEFAULT_CHAR_VOICE, ..._charVoicesCache[k], charId: k };
+    });
+    return out;
+  }
+
   async function saveCharVoice(charId, patch) {
     const key = String(charId || "").trim();
     if (!key) return null;
@@ -507,14 +526,32 @@
     return p === "minimax" || p === "elevenlabs" ? p : "fishaudio";
   }
 
-  function hasVoiceForCharacter(charId) {
+  function hasCloudVoiceForCharacter(charId, vpOverride) {
     const cfg = _configCache;
-    if (!cfg.enabled) return false;
-    const vp = getCharVoice(charId);
+    const vp = vpOverride || getCharVoice(charId);
     const provider = resolveActiveProvider(cfg);
     if (provider === "fishaudio") return Boolean(cfg.fishApiKey && vp.fishReferenceId);
     if (provider === "minimax") return Boolean(cfg.minimaxApiKey && vp.minimaxVoiceId);
     if (provider === "elevenlabs") return Boolean(cfg.elevenLabsApiKey && vp.elevenLabsVoiceId);
+    return false;
+  }
+
+  function shouldUseBuiltinForCharacter(charId, vpOverride) {
+    const cfg = _configCache;
+    if (!cfg.enabled) return false;
+    const vp = vpOverride || getCharVoice(charId);
+    if (vp.voiceSource === "builtin") return true;
+    if (!hasCloudVoiceForCharacter(charId, vp) && cfg.builtinFallbackEnabled) return true;
+    return false;
+  }
+
+  function hasVoiceForCharacter(charId) {
+    const cfg = _configCache;
+    if (!cfg.enabled) return false;
+    const vp = getCharVoice(charId);
+    if (vp.voiceSource === "builtin") return Boolean(global.BuiltinVoiceBridge);
+    if (hasCloudVoiceForCharacter(charId, vp)) return true;
+    if (cfg.builtinFallbackEnabled && global.BuiltinVoiceBridge) return true;
     return false;
   }
 
@@ -692,7 +729,7 @@
     } catch (e) {}
   }
 
-  function stopPlayback() {
+  function stopPlayback(opts) {
     const audio = getAudioEl();
     if (audio) {
       audio.onended = null;
@@ -704,6 +741,11 @@
       try { URL.revokeObjectURL(_activeObjectUrl); } catch (e) {}
       _activeObjectUrl = "";
     }
+    if (!(opts && opts.skipBuiltin) && global.BuiltinVoiceBridge && typeof global.BuiltinVoiceBridge.stop === "function") {
+      try {
+        global.BuiltinVoiceBridge.stop({ skipExternal: true });
+      } catch (e) {}
+    }
     setPlayState({ status: "idle", key: "", error: "" });
   }
 
@@ -713,6 +755,49 @@
       stopPlayback();
       return;
     }
+    const vpEffective = opts.voiceOverride ? { ...getCharVoice(charId), ...opts.voiceOverride } : getCharVoice(charId);
+    const useBuiltin = shouldUseBuiltinForCharacter(charId, vpEffective);
+
+    if (useBuiltin && global.BuiltinVoiceBridge && typeof global.BuiltinVoiceBridge.speakText === "function") {
+      stopPlayback();
+      const cfg = _configCache;
+      const isDirectBuiltin = vpEffective.voiceSource === "builtin";
+      const builtinOpts = isDirectBuiltin
+        ? {
+            key,
+            builtinMode: vpEffective.builtinMode || "animalese",
+            builtinPresetId: vpEffective.builtinPresetId || "scholar-warm",
+            builtinWebVoiceURI: vpEffective.builtinWebVoiceURI || "",
+            builtinTuning: vpEffective.builtinTuning || null,
+            speed: vpEffective.speed || 1.0,
+            builtinPitch: vpEffective.builtinPitch || 1.0
+          }
+        : {
+            key,
+            builtinMode: cfg.defaultBuiltinMode || "animalese",
+            builtinPresetId: cfg.defaultBuiltinPresetId || "scholar-warm",
+            builtinWebVoiceURI: cfg.defaultBuiltinWebVoiceURI || "",
+            builtinTuning: cfg.defaultBuiltinTuning || null,
+            speed: vpEffective.speed || 1.0,
+            builtinPitch: 1.0
+          };
+      setPlayState({ status: "playing", key, error: "" });
+      try {
+        const res = await global.BuiltinVoiceBridge.speakText(text, builtinOpts, {
+          onEnd: () => {
+            if (_playState.key === key) setPlayState({ status: "idle", key: "", error: "" });
+          },
+          onError: (e) => {
+            setPlayState({ status: "error", key, error: (e && e.message) || "内置音色播报失败" });
+          }
+        });
+        return res;
+      } catch (err) {
+        setPlayState({ status: "error", key, error: (err && err.message) || "内置音色播报失败" });
+        throw err;
+      }
+    }
+
     primeVoiceAudio();
     stopPlayback();
     setPlayState({ status: "loading", key, error: "" });
@@ -1149,19 +1234,24 @@
       cursor: "pointer"
     });
 
+    const BuiltinPanel = global.BuiltinVoiceBridge && global.BuiltinVoiceBridge.BuiltinVoiceStudioPanel;
+
     return React.createElement(
-      "div",
-      {
-        style: {
-          margin: "12px 0",
-          padding: "14px",
-          borderRadius: "14px",
-          border: "1px solid #E3DDD1",
-          background: "#FFFFFF",
-          color: "#383833",
-          fontSize: "12px"
-        }
-      },
+      React.Fragment,
+      null,
+      React.createElement(
+        "div",
+        {
+          style: {
+            margin: "12px 0",
+            padding: "14px",
+            borderRadius: "14px",
+            border: "1px solid #E3DDD1",
+            background: "#FFFFFF",
+            color: "#383833",
+            fontSize: "12px"
+          }
+        },
       React.createElement(
         "div",
         { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", gap: "8px" } },
@@ -1349,6 +1439,8 @@
         )
       ),
       tip && React.createElement("div", { style: { marginTop: "8px", fontSize: "11px", color: "#5E6756" } }, tip)
+      ),
+      BuiltinPanel ? React.createElement(BuiltinPanel, null) : null
     );
   }
 
@@ -1389,6 +1481,8 @@
     };
 
     const provider = resolveActiveProvider(cfg);
+    const voiceSource = vp.voiceSource === "builtin" ? "builtin" : "clone";
+    const BuiltinCharControls = global.BuiltinVoiceBridge && global.BuiltinVoiceBridge.CharacterBuiltinVoiceControls;
     const inputStyle = {
       width: "100%",
       padding: "7px 10px",
@@ -1415,82 +1509,142 @@
       },
       React.createElement(
         "div",
-        { style: { fontWeight: 700, marginBottom: "8px", display: "flex", justifyContent: "space-between" } },
+        { style: { fontWeight: 700, marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" } },
         React.createElement("span", null, `🔊 ${charName} · 专属音色（按角色独立）`),
-        React.createElement("span", { style: { fontSize: "10.5px", color: "#8B7D6B" } }, `当前：${provider}`)
+        React.createElement(
+          "span",
+          { style: { fontSize: "10.5px", color: "#8B7D6B" } },
+          voiceSource === "builtin"
+            ? (global.BuiltinVoiceBridge ? global.BuiltinVoiceBridge.describeBuiltinVoice(vp) : "内置音色")
+            : `云端：${provider}`
+        )
       ),
-      provider === "fishaudio" &&
-        React.createElement("input", {
-          type: "text",
-          value: vp.fishReferenceId || "",
-          placeholder: "粘贴鱼声 reference_id 或 fish.audio 音色链接（自动提取）",
-          onChange: (e) => updateVp({ fishReferenceId: e.target.value }),
-          onBlur: (e) => updateVp({ fishReferenceId: normalizeFishReferenceId(e.target.value) }),
-          style: inputStyle
-        }),
-      provider === "minimax" &&
-        React.createElement("input", {
-          type: "text",
-          value: vp.minimaxVoiceId || "",
-          placeholder: "输入该名士专属 MiniMax Voice ID",
-          onChange: (e) => updateVp({ minimaxVoiceId: e.target.value }),
-          style: inputStyle
-        }),
-      provider === "elevenlabs" &&
-        React.createElement("input", {
-          type: "text",
-          value: vp.elevenLabsVoiceId || "",
-          placeholder: "输入该名士专属 ElevenLabs Voice ID",
-          onChange: (e) => updateVp({ elevenLabsVoiceId: e.target.value }),
-          style: inputStyle
-        }),
+      // 双轨切换：云端克隆 vs 内置免费音色
       React.createElement(
         "div",
-        { style: { display: "flex", alignItems: "center", gap: "10px", marginTop: "8px", flexWrap: "wrap", fontSize: "11px" } },
+        { style: { display: "flex", gap: "6px", marginBottom: "8px", background: "#F2ECE0", padding: "3px", borderRadius: "9px" } },
         React.createElement(
-          "label",
-          { style: { display: "flex", alignItems: "center", gap: "4px" } },
-          `语速 ${Number(vp.speed || 1).toFixed(2)}x`,
-          React.createElement("input", {
-            type: "range",
-            min: "0.75",
-            max: "1.35",
-            step: "0.05",
-            value: Number(vp.speed || 1),
-            onChange: (e) => updateVp({ speed: parseFloat(e.target.value) }),
-            style: { width: "76px" }
-          })
-        ),
-        React.createElement(
-          "label",
-          { style: { display: "flex", alignItems: "center", gap: "4px", cursor: "pointer" } },
-          React.createElement("input", {
-            type: "checkbox",
-            checked: !!vp.autoPlay,
-            onChange: (e) => updateVp({ autoPlay: e.target.checked })
-          }),
-          "收到自动播"
+          "button",
+          {
+            type: "button",
+            onClick: () => updateVp({ voiceSource: "clone" }),
+            style: {
+              flex: 1,
+              padding: "5px 8px",
+              borderRadius: "7px",
+              border: "none",
+              background: voiceSource === "clone" ? "#FFFFFF" : "transparent",
+              color: voiceSource === "clone" ? "#433C31" : "#7D7568",
+              fontSize: "11px",
+              fontWeight: voiceSource === "clone" ? 700 : 500,
+              cursor: "pointer"
+            }
+          },
+          "☁️ 云端克隆音色"
         ),
         React.createElement(
           "button",
           {
             type: "button",
-            onClick: handlePreview,
+            onClick: () => updateVp({ voiceSource: "builtin" }),
             style: {
-              marginLeft: "auto",
-              padding: "4px 10px",
-              borderRadius: "999px",
+              flex: 1,
+              padding: "5px 8px",
+              borderRadius: "7px",
               border: "none",
-              background: "#5E6756",
-              color: "#FFF",
+              background: voiceSource === "builtin" ? "#FFFFFF" : "transparent",
+              color: voiceSource === "builtin" ? "#3D5B42" : "#7D7568",
               fontSize: "11px",
+              fontWeight: voiceSource === "builtin" ? 700 : 500,
               cursor: "pointer"
             }
           },
-          "🔊 试听一句"
+          "📻 内置音色（免 Key）"
         )
       ),
-      status && React.createElement("div", { style: { marginTop: "6px", fontSize: "11px", color: "#6D6558" } }, status)
+      voiceSource === "builtin" && BuiltinCharControls
+        ? React.createElement(BuiltinCharControls, {
+            charId,
+            charName,
+            vp,
+            onUpdateVp: updateVp
+          })
+        : React.createElement(
+            React.Fragment,
+            null,
+            provider === "fishaudio" &&
+              React.createElement("input", {
+                type: "text",
+                value: vp.fishReferenceId || "",
+                placeholder: "粘贴鱼声 reference_id 或 fish.audio 音色链接（自动提取）",
+                onChange: (e) => updateVp({ fishReferenceId: e.target.value }),
+                onBlur: (e) => updateVp({ fishReferenceId: normalizeFishReferenceId(e.target.value) }),
+                style: inputStyle
+              }),
+            provider === "minimax" &&
+              React.createElement("input", {
+                type: "text",
+                value: vp.minimaxVoiceId || "",
+                placeholder: "输入该名士专属 MiniMax Voice ID",
+                onChange: (e) => updateVp({ minimaxVoiceId: e.target.value }),
+                style: inputStyle
+              }),
+            provider === "elevenlabs" &&
+              React.createElement("input", {
+                type: "text",
+                value: vp.elevenLabsVoiceId || "",
+                placeholder: "输入该名士专属 ElevenLabs Voice ID",
+                onChange: (e) => updateVp({ elevenLabsVoiceId: e.target.value }),
+                style: inputStyle
+              }),
+            React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "10px", marginTop: "8px", flexWrap: "wrap", fontSize: "11px" } },
+              React.createElement(
+                "label",
+                { style: { display: "flex", alignItems: "center", gap: "4px" } },
+                `语速 ${Number(vp.speed || 1).toFixed(2)}x`,
+                React.createElement("input", {
+                  type: "range",
+                  min: "0.75",
+                  max: "1.35",
+                  step: "0.05",
+                  value: Number(vp.speed || 1),
+                  onChange: (e) => updateVp({ speed: parseFloat(e.target.value) }),
+                  style: { width: "76px" }
+                })
+              ),
+              React.createElement(
+                "label",
+                { style: { display: "flex", alignItems: "center", gap: "4px", cursor: "pointer" } },
+                React.createElement("input", {
+                  type: "checkbox",
+                  checked: !!vp.autoPlay,
+                  onChange: (e) => updateVp({ autoPlay: e.target.checked })
+                }),
+                "收到自动播"
+              ),
+              React.createElement(
+                "button",
+                {
+                  type: "button",
+                  onClick: handlePreview,
+                  style: {
+                    marginLeft: "auto",
+                    padding: "4px 10px",
+                    borderRadius: "999px",
+                    border: "none",
+                    background: "#5E6756",
+                    color: "#FFF",
+                    fontSize: "11px",
+                    cursor: "pointer"
+                  }
+                },
+                "🔊 试听一句"
+              )
+            ),
+            status && React.createElement("div", { style: { marginTop: "6px", fontSize: "11px", color: "#6D6558" } }, status)
+          )
     );
   }
 
@@ -1526,6 +1680,62 @@
     const isPlaying = isMe && state.status === "playing";
     const isError = isMe && state.status === "error";
 
+    // 手绘细线矢量图标（零 Emoji）
+    const renderSvgIcon = (kind) => {
+      const common = {
+        width: 13,
+        height: 13,
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: 1.9,
+        strokeLinecap: "round",
+        strokeLinejoin: "round",
+        style: { flexShrink: 0, display: "block" }
+      };
+      if (kind === "stop") {
+        return React.createElement(
+          "svg",
+          common,
+          React.createElement("rect", { x: "6", y: "6", width: "12", height: "12", rx: "2.5", fill: "currentColor", stroke: "none" })
+        );
+      }
+      if (kind === "loading") {
+        return React.createElement(
+          "svg",
+          common,
+          React.createElement("circle", { cx: "12", cy: "12", r: "8.5", opacity: "0.28" }),
+          React.createElement("path", { d: "M12 3.5a8.5 8.5 0 0 1 8.5 8.5" })
+        );
+      }
+      if (kind === "error") {
+        return React.createElement(
+          "svg",
+          common,
+          React.createElement("path", { d: "M10.3 4.3 2.8 17.5a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z" }),
+          React.createElement("path", { d: "M12 9.5v4" }),
+          React.createElement("circle", { cx: "12", cy: "16.8", r: "0.8", fill: "currentColor" })
+        );
+      }
+      if (kind === "wave") {
+        return React.createElement(
+          "svg",
+          common,
+          React.createElement("path", { d: "M6 9.5a4 4 0 0 1 0 5" }),
+          React.createElement("path", { d: "M10 6.5a8 8 0 0 1 0 11" }),
+          React.createElement("path", { d: "M14.5 4a12 12 0 0 1 0 16" })
+        );
+      }
+      // speaker
+      return React.createElement(
+        "svg",
+        common,
+        React.createElement("path", { d: "M11 5.5 6.5 9.2H3.5a1 1 0 0 0-1 1v3.6a1 1 0 0 0 1 1h3L11 18.5V5.5Z" }),
+        React.createElement("path", { d: "M15.2 9.2a4.2 4.2 0 0 1 0 5.6" }),
+        React.createElement("path", { d: "M18.3 6.5a8 8 0 0 1 0 11" })
+      );
+    };
+
     // 若包含 <语音> 标签，渲染拟真微信式语音条 + 转文字开关
     if (hasVoiceTag) {
       const cleanTranscript = stripVoiceMarkupForDisplay(extractVoiceBlock(rawText));
@@ -1558,7 +1768,12 @@
                 cursor: "pointer"
               }
             },
-            React.createElement("span", null, isLoading ? "⏳ 合成中..." : isPlaying ? "🔊 播报中..." : isError ? "⚠ 点击重试" : "(( 🔊 语音条"),
+            React.createElement(
+              "span",
+              { style: { display: "inline-flex", alignItems: "center", gap: "5px" } },
+              renderSvgIcon(isLoading ? "loading" : isPlaying ? "stop" : isError ? "error" : "wave"),
+              React.createElement("span", null, isLoading ? "合成中" : isPlaying ? "播报中" : isError ? "点击重试" : "语音条")
+            ),
             React.createElement("span", { style: { fontSize: "11px", opacity: 0.75, marginLeft: "8px" } }, `${estSec}"`)
           ),
           React.createElement(
@@ -1613,19 +1828,114 @@
         style: {
           display: "inline-flex",
           alignItems: "center",
-          gap: "3px",
+          gap: "4px",
           marginTop: "4px",
-          padding: "2px 8px",
+          padding: "3px 9px",
           borderRadius: "999px",
           border: "1px solid rgba(94,103,86,0.22)",
-          background: isPlaying ? "rgba(94,103,86,0.14)" : "rgba(255,255,255,0.65)",
+          background: isPlaying ? "rgba(94,103,86,0.14)" : "rgba(255,255,255,0.72)",
           color: isError ? "#B54534" : "#4E5747",
           fontSize: "10.5px",
           cursor: "pointer"
         }
       },
-      isLoading ? "⏳ 合成中" : isPlaying ? "⏹ 播报中" : isError ? "⚠ 重试语音" : "🔊 朗读"
+      renderSvgIcon(isLoading ? "loading" : isPlaying ? "stop" : isError ? "error" : "speaker"),
+      React.createElement("span", null, isLoading ? "合成中" : isPlaying ? "播报中" : isError ? "重试语音" : "朗读")
     );
+  }
+
+  async function speakForCharacter(charId, text, opts = {}) {
+    await hydrate();
+    if (!hasVoiceForCharacter(charId)) return { skipped: true };
+    return playTextForCharacter(text, charId, opts);
+  }
+
+  async function requestMicPermission() {
+    try {
+      if (typeof navigator === "undefined" || !navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
+        return { granted: false, reason: "unsupported" };
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      try {
+        stream.getTracks().forEach((t) => t.stop());
+      } catch (_) {}
+      return { granted: true };
+    } catch (err) {
+      return { granted: false, reason: (err && (err.name || err.message)) || "denied" };
+    }
+  }
+
+  function startCallSpeechCapture(callbacks) {
+    const cb = callbacks || {};
+    const SR = global.SpeechRecognition || global.webkitSpeechRecognition;
+    if (SR) {
+      let stopped = false;
+      const rec = new SR();
+      rec.lang = "zh-CN";
+      rec.interimResults = true;
+      rec.continuous = false;
+      rec.onstart = () => { if (typeof cb.onStart === "function") cb.onStart(); };
+      rec.onresult = (e) => {
+        if (stopped) return;
+        let interim = "";
+        let finalText = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const r = e.results[i];
+          const txt = (r && r[0] && r[0].transcript) || "";
+          if (r.isFinal) finalText += txt;
+          else interim += txt;
+        }
+        if (interim && typeof cb.onInterim === "function") cb.onInterim(interim);
+        if (finalText.trim() && typeof cb.onResult === "function") {
+          stopped = true;
+          cb.onResult(finalText.trim());
+        }
+      };
+      rec.onerror = (e) => {
+        if (typeof cb.onError === "function") cb.onError((e && e.error) || "语音识别失败");
+      };
+      rec.onend = () => {
+        if (typeof cb.onEnd === "function") cb.onEnd();
+      };
+      try {
+        rec.start();
+      } catch (e) {
+        if (typeof cb.onError === "function") cb.onError((e && e.message) || "无法启动麦克风");
+      }
+      return {
+        stop: () => {
+          stopped = true;
+          try { rec.stop(); } catch (_) {}
+        }
+      };
+    }
+
+    // 兜底：使用 VoiceStudioEngine 录音转写会话
+    let sttSession = null;
+    try {
+      sttSession = startRecordingAndTranscribe({
+        onInterim: cb.onInterim,
+        onResult: (txt) => {
+          if (txt && txt.trim() && typeof cb.onResult === "function") cb.onResult(txt.trim());
+          if (typeof cb.onEnd === "function") cb.onEnd();
+        },
+        onError: (err) => {
+          if (typeof cb.onError === "function") cb.onError((err && err.message) || String(err || "录音失败"));
+          if (typeof cb.onEnd === "function") cb.onEnd();
+        }
+      });
+      if (typeof cb.onStart === "function") cb.onStart();
+    } catch (e) {
+      if (typeof cb.onError === "function") cb.onError((e && e.message) || "当前浏览器不支持语音识别");
+      if (typeof cb.onEnd === "function") cb.onEnd();
+    }
+    return {
+      stop: () => {
+        if (sttSession && typeof sttSession.stop === "function") {
+          try { sttSession.stop(); } catch (_) {}
+        }
+      }
+    };
   }
 
   // 自动预热加载
@@ -1636,15 +1946,20 @@
     getConfig,
     saveConfig,
     getCharVoice,
+    getAllCharVoices,
     saveCharVoice,
     hasVoiceForCharacter,
+    shouldUseBuiltinForCharacter,
     discoverExistingWorkerBaseUrl,
     getCacheStats,
     clearAudioCache,
     synthesizeForCharacter,
     playTextForCharacter,
+    speakForCharacter,
     stopPlayback,
     primeVoiceAudio,
+    requestMicPermission,
+    startCallSpeechCapture,
     startRecordingAndTranscribe,
     resolveSttProvider,
     testVoiceConnection,

@@ -262,7 +262,7 @@
           React.createElement("input", {
             type: "text",
             value: query,
-            placeholder: "搜索设置项（如：背景、记忆、音色、万象、清空…）",
+            placeholder: "搜索设置项（如：背景、记忆、音色、清空…）",
             onChange: (e) => setQuery(e.target.value),
             style: {
               width: "100%",
@@ -342,7 +342,7 @@
         { style: { ...sectionCardStyle, display: showAdvancedSection ? "block" : "none" } },
         React.createElement(AccordionHeader, {
           title: "进阶设置",
-          subtitle: "好感 · 参数 · 提示词 · 音色 · 万象",
+          subtitle: "好感 · 参数 · 提示词 · 音色 · 自主权",
           count: result.advancedCount,
           open: isAdvancedOpen,
           onToggle: () => toggleGroup("advancedOpen")
@@ -425,7 +425,8 @@
     CompanionMemoryEntryCard: { group: "basic", title: "伴侣分层记忆", kw: "伴侣 分层记忆 folio 向量 召回 记忆" },
     ProactiveMsgSettingsCard: { group: "basic", title: "鸿雁传书主动发消息", kw: "主动发消息 定时 离线 鸿雁 传书 推送 早安 晚安 免打扰 群聊" },
     ChatPacingPrefsCard: { group: "advanced", title: "表情包与红包节律", kw: "表情包 红包 节律 冷却 概率 频率" },
-    CharacterVoiceCard: { group: "advanced", title: "名士专属音色", kw: "语音 音色 tts 鱼声 fish minimax elevenlabs 试听" },
+    CharacterVoiceCard: { group: "advanced", title: "名士专属音色", kw: "语音 音色 tts 鱼声 fish minimax elevenlabs 试听 内置音色 动森 真人 广陵 朗读" },
+    AiAutonomyControlCard: { group: "basic", title: "AI 自主权力总控台", kw: "自主权力 活人感 权限 引用 日历 愿望 撤回 改名 签名 备注 留痕 冷静期 退回红包 脾气" },
     WanxiangSettingsEntryCard: { group: "advanced", title: "万象装扮协作台", kw: "万象 气泡 工具栏 头像框 css 美化 装扮" },
     TranslationSettingsCard: { group: "advanced", title: "对话输出翻译", kw: "翻译 双语 羌语 字幕 英语 日语 韩语 外语 原文 译文 西凉" },
     ThinkingChainSettingsCard: { group: "advanced", title: "灵犀推演思维链", kw: "思维链 思考 推演 deepseek 推理 reasoning think 心绪 内心" }

@@ -1083,6 +1083,22 @@ ${wbBlock ? `\n${wbBlock}` : ""}${visionNote}
       };
 
       const triggerVoiceInput = () => {
+        const vse = global.VoiceStudioEngine;
+        if (vse && typeof vse.startCallSpeechCapture === "function") {
+          setMicListening(true);
+          vse.startCallSpeechCapture({
+            onResult: (spoken) => {
+              setMicListening(false);
+              if (spoken && spoken.trim()) handleSendTurn(spoken.trim());
+            },
+            onError: () => {
+              setMicListening(false);
+              flashToast("语音识别未听清，可在聊天栏直接输入");
+            },
+            onEnd: () => setMicListening(false)
+          });
+          return;
+        }
         const SR = global.SpeechRecognition || global.webkitSpeechRecognition;
         if (!SR) {
           setChatOpen(true);
@@ -1111,14 +1127,34 @@ ${wbBlock ? `\n${wbBlock}` : ""}${visionNote}
       };
 
       const playTtsIfEnabled = async (speakerId, text) => {
-        if (!prefs.ttsEnabled) return;
+        if (!prefs.ttsEnabled || !text) return;
         const vse = global.VoiceStudioEngine;
-        if (vse && typeof vse.speakForCharacter === "function") {
-          try {
-            await vse.speakForCharacter(speakerId, text);
-          } catch (e) {}
-        }
+        if (!vse) return;
+        const targetId = speakerId || (chatData && chatData.id);
+        try {
+          if (typeof vse.speakForCharacter === "function") {
+            await vse.speakForCharacter(targetId, text, { msgKey: `vcall_${Date.now()}_${Math.random().toString(36).slice(2, 6)}` });
+          } else if (typeof vse.playTextForCharacter === "function" && (!vse.hasVoiceForCharacter || vse.hasVoiceForCharacter(targetId))) {
+            await vse.playTextForCharacter(text, targetId, { msgKey: `vcall_${Date.now()}_${Math.random().toString(36).slice(2, 6)}` });
+          }
+        } catch (e) {}
       };
+
+      useEffect(() => {
+        const vse = global.VoiceStudioEngine;
+        if (vse && typeof vse.hasVoiceForCharacter === "function") {
+          const anyVoiced = (participants || []).some((p) => vse.hasVoiceForCharacter(p && p.id)) || (chatData && vse.hasVoiceForCharacter(chatData.id));
+          if (anyVoiced) {
+            try { vse.primeVoiceAudio && vse.primeVoiceAudio(); } catch (_) {}
+            if (typeof vse.requestMicPermission === "function") {
+              vse.requestMicPermission().catch(() => {});
+            }
+          }
+        }
+        return () => {
+          try { global.VoiceStudioEngine && global.VoiceStudioEngine.stopPlayback && global.VoiceStudioEngine.stopPlayback(); } catch (_) {}
+        };
+      }, []);
 
       const handleSendTurn = async (textOverride, extraOpts = {}) => {
         const wbUrl = extraOpts.whiteboardDataUrl || null;

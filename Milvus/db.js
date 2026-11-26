@@ -1592,7 +1592,16 @@ const chatHistoryStore = {
       const request = index.getAll(range);
 
       request.onsuccess = () => {
-        const msgs = (request.result || []).sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+        const getSortableTs = (m) => {
+          if (!m || m.id === undefined || m.id === null) return 0;
+          if (typeof m.id === "number" && Number.isFinite(m.id)) return m.id;
+          const num = Number(m.id);
+          if (Number.isFinite(num) && num > 0) return num;
+          const match = String(m.id).match(/(\d{13,})/);
+          if (match) return Number(match[1]);
+          return Number(m.timestamp || m.createdAt || 0) || 0;
+        };
+        const msgs = (request.result || []).sort((a, b) => getSortableTs(a) - getSortableTs(b));
         resolve({
           messages: msgs,
           totalCount: msgs.length
@@ -1635,6 +1644,16 @@ const chatHistoryStore = {
             cursorCount++;
             cursor.continue();
           } else {
+            const getSortableTs = (m) => {
+              if (!m || m.id === undefined || m.id === null) return 0;
+              if (typeof m.id === "number" && Number.isFinite(m.id)) return m.id;
+              const num = Number(m.id);
+              if (Number.isFinite(num) && num > 0) return num;
+              const match = String(m.id).match(/(\d{13,})/);
+              if (match) return Number(match[1]);
+              return Number(m.timestamp || m.createdAt || 0) || 0;
+            };
+            messages.sort((a, b) => getSortableTs(a) - getSortableTs(b));
             resolve({
               messages,
               page,

@@ -314,11 +314,16 @@
   }
 
   function buildRedPacketPromptLine(isGroup, gate) {
-    if (!gate || !gate.allowRedPacket) return "";
+    if (!gate) return "";
+    if (gate.redPacketReason === "disabled") return "";
     if (isGroup) {
+      if (!gate.allowRedPacket) return "";
       return `   - 发起群拼手气红包（本轮仅当剧情自然契合发薪/庆贺/哄人时至多 1 人使用）：[发起红包: 总金额|份数|祝福语]（如 [发起红包: 88|4|发薪同乐]）\n`;
     }
-    return `3. 主动发五铢钱红包（仅在发薪、哄人或表达心意极契合时使用，不必强发）：[发红包: 金额|祝福语]（如 [发红包: 88|拿去买蜜饯吃]），对方可点击拆开入账。\n`;
+    if (gate.allowRedPacket) {
+      return `3. 主动发五铢钱红包（仅在发薪、哄人或表达心意极契合时使用，不必强发）：[发红包: 金额|祝福语]（如 [发红包: 88|拿去买蜜饯吃]），对方可点击拆开入账。\n`;
+    }
+    return `3. 主动发五铢钱红包（当前处于自然冷却期，仅在对方明确讨红包、逢节庆生或哄人情绪极到位时才偶尔使用，日常闲聊请勿使用）：[发红包: 金额|祝福语]（如 [发红包: 88|拿去买蜜饯吃]）。\n`;
   }
 
   // ==========================================
@@ -430,9 +435,13 @@
 
   function shouldAllowRedPacketCard(options = {}) {
     const gate = options.gate;
+    const isGroup = Boolean(options.isGroup);
     const spawnedCountInTurn = Number(options.spawnedCountInTurn) || 0;
     if (spawnedCountInTurn >= 1) return false;
-    if (gate && gate.allowRedPacket === false) return false;
+    // 用户明确关闭红包档位时严格拦截
+    if (gate && gate.redPacketReason === "disabled") return false;
+    // 群聊继续遵循门控（避免多人刷红包）；私聊只要未禁用且本轮未发过，尊重 AI 主动发出的 [发红包:...] 标签，不再 85% 静默吞掉
+    if (isGroup && gate && gate.allowRedPacket === false) return false;
     return true;
   }
 

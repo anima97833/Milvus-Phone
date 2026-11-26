@@ -130,24 +130,39 @@
         const blessing = (args.blessing || "一点心意，愿君欢喜").trim();
         const charName = context.character || "名士";
         const charId = context.characterId;
-        
-        // 自动注入到当前单聊消息中
+        const nowTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const newRp = {
+          id: Date.now() + Math.random(),
+          type: "red_packet",
+          isMe: false,
+          time: nowTime,
+          text: `[五铢钱心意红包] ${amount} 铢：${blessing}`,
+          content: {
+            amount: amount,
+            amountStr: `${amount} 铢`,
+            blessing: blessing,
+            claimed: false,
+            senderName: charName
+          }
+        };
+
+        // 1) 排入待注入队列，确保在 T8ChatDetail 最终消息落盘时直接合入实时消息流（不被 React 旧 state 覆盖）
+        if (charId && typeof window !== "undefined") {
+          window.__MILVUS_MCP_PENDING_CARDS__ = window.__MILVUS_MCP_PENDING_CARDS__ || {};
+          const key = String(charId);
+          if (!Array.isArray(window.__MILVUS_MCP_PENDING_CARDS__[key])) {
+            window.__MILVUS_MCP_PENDING_CARDS__[key] = [];
+          }
+          window.__MILVUS_MCP_PENDING_CARDS__[key].push(newRp);
+        }
+
+        // 2) 兜底同步写入 chatHistoryStore（兼容数组与 { messages } 结构）
         if (charId && window.chatHistoryStore) {
           try {
-            const history = await window.chatHistoryStore.getMessages(charId) || [];
-            const newRp = {
-              id: Date.now() + Math.random(),
-              type: "role_red_packet",
-              isMe: false,
-              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-              content: {
-                amount: amount,
-                amountStr: `${amount} 铢`,
-                blessing: blessing,
-                status: "unclaimed",
-                senderName: charName
-              }
-            };
+            const rawHistory = await window.chatHistoryStore.getMessages(charId);
+            const history = Array.isArray(rawHistory)
+              ? rawHistory
+              : (rawHistory && Array.isArray(rawHistory.messages) ? rawHistory.messages : []);
             await window.chatHistoryStore.saveMessages(charId, [...history, newRp]);
           } catch(e) {
             console.warn("MCP 注入红包失败:", e);
@@ -188,24 +203,43 @@
       handler: async function (args, context) {
         const itemName = (args.item_name || args.itemName || "心意礼物").trim();
         const blessing = (args.blessing || "见字如面，特赠此物").trim();
+        const merchant = (args.merchant || `${context.character || "名士"}私藏`).trim();
+        const price = (args.price || "心意无价").trim();
         const charName = context.character || "名士";
         const charId = context.characterId;
+        const nowTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const newGift = {
+          id: Date.now() + Math.random(),
+          type: "gift_card",
+          isMe: false,
+          time: nowTime,
+          text: `[赠送心意礼物] ${itemName}：${blessing}`,
+          content: {
+            itemName: itemName,
+            merchant: merchant,
+            price: price,
+            blessing: blessing,
+            senderName: charName
+          }
+        };
 
+        // 1) 排入待注入队列，确保在 T8ChatDetail 最终消息落盘时直接合入实时消息流
+        if (charId && typeof window !== "undefined") {
+          window.__MILVUS_MCP_PENDING_CARDS__ = window.__MILVUS_MCP_PENDING_CARDS__ || {};
+          const key = String(charId);
+          if (!Array.isArray(window.__MILVUS_MCP_PENDING_CARDS__[key])) {
+            window.__MILVUS_MCP_PENDING_CARDS__[key] = [];
+          }
+          window.__MILVUS_MCP_PENDING_CARDS__[key].push(newGift);
+        }
+
+        // 2) 兜底同步写入 chatHistoryStore（兼容数组与 { messages } 结构）
         if (charId && window.chatHistoryStore) {
           try {
-            const history = await window.chatHistoryStore.getMessages(charId) || [];
-            const newGift = {
-              id: Date.now() + Math.random(),
-              type: "role_gift",
-              isMe: false,
-              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-              content: {
-                itemName: itemName,
-                blessing: blessing,
-                status: "unopened",
-                senderName: charName
-              }
-            };
+            const rawHistory = await window.chatHistoryStore.getMessages(charId);
+            const history = Array.isArray(rawHistory)
+              ? rawHistory
+              : (rawHistory && Array.isArray(rawHistory.messages) ? rawHistory.messages : []);
             await window.chatHistoryStore.saveMessages(charId, [...history, newGift]);
           } catch(e) {
             console.warn("MCP 注入礼物失败:", e);
@@ -1084,14 +1118,81 @@
       defaultEnabled: true,
       handler: async (args, context) => {
         const charName = context?.character || "名士";
-        const rawTitle = (args.title || "手绘草图").trim();
-        const title = rawTitle.replace(/^[《〈【\s]+|[》〉】\s]+$/g, "").trim() || "手绘草图";
-        let rawSvg = (args.svgContent || "").trim();
+        const charId = context?.characterId;
+        const rawTitle = (args.title || args.prompt || args.subject || args.description || "手绘简笔画").trim();
+        const title = rawTitle.replace(/^[《〈【\s]+|[》〉】\s]+$/g, "").trim() || "手绘简笔画";
+        let rawSvg = (args.svgContent || args.svg || "").trim();
         const strokeColor = args.strokeColor || "#3d3b38";
         const duration = args.duration || 3.0;
-        const description = (args.description || "").trim();
+        const description = (args.description || args.prompt || "").trim();
 
-        if (!rawSvg) return { error: "SVG 内容不能为空" };
+        // 若模型未手写 svgContent 或传入残缺，根据主题自动生成精致矢量简笔画线稿（永不报错）
+        if (!rawSvg || !/<(?:path|circle|line|rect|ellipse|polygon|polyline)\b/i.test(rawSvg)) {
+          const hint = `${title} ${description}`.toLowerCase();
+          const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          let shapes = "";
+          if (/猫|咪|cat|小猫|猫咪/.test(hint)) {
+            shapes = `
+              <path d="M135 165 L145 105 L180 135 Q200 128 220 135 L255 105 L265 165 Q275 215 200 225 Q125 215 135 165 Z" fill="none"/>
+              <circle cx="176" cy="168" r="5" fill="none"/>
+              <circle cx="224" cy="168" r="5" fill="none"/>
+              <path d="M194 182 L200 188 L206 182 M200 188 Q190 198 182 194 M200 188 Q210 198 218 194" fill="none"/>
+              <path d="M110 175 L148 178 M112 192 L148 188 M252 178 L290 175 M252 188 L288 192" fill="none"/>
+              <path d="M265 205 Q315 190 305 145 Q298 125 320 120" fill="none"/>
+            `;
+          } else if (/花|梅|兰|竹|莲|荷|玫瑰|草|枝|flower/.test(hint)) {
+            shapes = `
+              <path d="M90 250 Q165 215 215 155 T315 80" fill="none"/>
+              <path d="M175 190 Q220 205 260 185" fill="none"/>
+              <circle cx="225" cy="135" r="14" fill="none"/>
+              <circle cx="248" cy="128" r="14" fill="none"/>
+              <circle cx="255" cy="152" r="14" fill="none"/>
+              <circle cx="232" cy="160" r="14" fill="none"/>
+              <circle cx="215" cy="148" r="14" fill="none"/>
+              <circle cx="236" cy="144" r="6" fill="none"/>
+              <path d="M288 96 Q305 72 325 88 Q312 108 288 96 Z" fill="none"/>
+              <path d="M140 220 Q118 195 148 188 Q155 210 140 220 Z" fill="none"/>
+            `;
+          } else if (/茶|酒|杯|盏|壶|粥|碗|点心|糕|吃/.test(hint)) {
+            shapes = `
+              <path d="M140 160 L260 160 Q255 225 200 230 Q145 225 140 160 Z" fill="none"/>
+              <path d="M125 232 Q200 248 275 232" fill="none"/>
+              <path d="M260 175 Q290 175 288 198 Q285 215 254 212" fill="none"/>
+              <path d="M175 142 Q165 122 180 105 Q192 90 180 75" fill="none"/>
+              <path d="M205 140 Q195 118 210 102 Q222 86 210 70" fill="none"/>
+              <path d="M235 145 Q228 125 240 112" fill="none"/>
+            `;
+          } else if (/月|星|夜|灯|窗|雨|雪|山|水|亭/.test(hint)) {
+            shapes = `
+              <path d="M275 72 A38 38 0 1 0 315 122 A30 30 0 1 1 275 72 Z" fill="none"/>
+              <path d="M55 230 Q125 145 195 210 T345 225" fill="none"/>
+              <path d="M95 245 Q200 225 315 248" fill="none"/>
+              <path d="M110 92 L114 102 L124 106 L114 110 L110 120 L106 110 L96 106 L106 102 Z" fill="none"/>
+              <circle cx="160" cy="84" r="3" fill="none"/>
+              <circle cx="205" cy="112" r="2.5" fill="none"/>
+            `;
+          } else if (/心|爱|你|我|人|小人|牵手|抱|笑/.test(hint)) {
+            shapes = `
+              <circle cx="155" cy="118" r="22" fill="none"/>
+              <path d="M155 140 L155 205 M155 158 L125 182 M155 158 L195 174 M155 205 L135 248 M155 205 L175 248" fill="none"/>
+              <circle cx="245" cy="122" r="22" fill="none"/>
+              <path d="M245 144 L245 205 M245 162 L205 174 M245 162 L275 185 M245 205 L225 248 M245 205 L265 248" fill="none"/>
+              <path d="M200 95 C192 80 174 84 176 98 C178 110 200 124 200 124 C200 124 222 110 224 98 C226 84 208 80 200 95 Z" fill="none"/>
+            `;
+          } else {
+            shapes = `
+              <path d="M75 215 Q145 125 210 185 T330 145" fill="none"/>
+              <circle cx="295" cy="96" r="22" fill="none"/>
+              <path d="M90 242 Q200 222 315 242" fill="none"/>
+              <path d="M125 148 Q145 128 165 142 Q180 126 198 144" fill="none"/>
+            `;
+          }
+          rawSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" height="auto">
+            <rect x="8" y="8" width="384" height="284" rx="14" fill="#fbf7ee" stroke="#d8c7aa"/>
+            ${shapes}
+            <text x="200" y="274" text-anchor="middle" font-size="14" fill="${strokeColor}">《${esc(title.slice(0, 22))}》 · ${esc(charName)}手绘</text>
+          </svg>`;
+        }
 
         // 1. 清洗 Markdown 标记
         rawSvg = rawSvg.replace(/```(?:xml|svg)?/gi, "").replace(/```/g, "").trim();
@@ -1187,7 +1288,7 @@
           localStorage.setItem(cacheKey, JSON.stringify(dynData));
         } catch (e) { }
 
-        // 广播画作生成事件并保存全局状态
+        // 广播画作生成事件并保存全局状态 + 排入私聊待注入卡片队列
         try {
           window.__lastMcpGeneratedImage = {
             imageUrl: svgDataUrl,
@@ -1197,6 +1298,22 @@
             timestamp: Date.now(),
             isVectorSketch: true
           };
+          if (charId && typeof window !== "undefined") {
+            window.__MILVUS_MCP_PENDING_CARDS__ = window.__MILVUS_MCP_PENDING_CARDS__ || {};
+            const key = String(charId);
+            if (!Array.isArray(window.__MILVUS_MCP_PENDING_CARDS__[key])) {
+              window.__MILVUS_MCP_PENDING_CARDS__[key] = [];
+            }
+            window.__MILVUS_MCP_PENDING_CARDS__[key].push({
+              id: Date.now() + Math.floor(Math.random() * 100),
+              type: "image",
+              isMe: false,
+              text: `《${title}》`,
+              content: svgDataUrl,
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              thought: null
+            });
+          }
           window.dispatchEvent(new CustomEvent("mcp_image_generated", {
             detail: { imageUrl: svgDataUrl, svgContent: animatedSvg, title: `《${title}》`, character: charName, timestamp: Date.now() }
           }));

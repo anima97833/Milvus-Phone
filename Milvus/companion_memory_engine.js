@@ -46,6 +46,8 @@
   const DEFAULT_PREFS = {
     enabled: false,                // 总开关（用户在对话偏好设置中开启）
     autoFolio: true,               // 自动后台 Folio 滚动压缩
+    folioTriggerMessages: 24,      // 全局默认：每累积多少条未归档消息记录一次胶囊（可自定义 6~200）
+    perChatTriggerMessages: {},    // { [charId]: number } 按单个名士独立设置触发条数
     autoDaySummary: true,          // 跨天自动生成前一日分段总结
     useRecallGate: true,           // 启用独立小模型挑选门
     embedUrl: "https://api.siliconflow.cn/v1/embeddings",
@@ -59,6 +61,21 @@
     pickerModel: "",
     perChatEnabled: {}             // { [charId]: boolean } 可按单个名士独立开关
   };
+
+  function clampTriggerMessages(v) {
+    const n = Math.round(Number(v));
+    if (!Number.isFinite(n) || n <= 0) return MESSAGE_CAP;
+    return Math.max(6, Math.min(200, n));
+  }
+
+  function getTriggerMessageCount(charId) {
+    const p = _prefsCache || DEFAULT_PREFS;
+    const cid = String(charId || "");
+    if (cid && p.perChatTriggerMessages && Number(p.perChatTriggerMessages[cid]) > 0) {
+      return clampTriggerMessages(p.perChatTriggerMessages[cid]);
+    }
+    return clampTriggerMessages(p.folioTriggerMessages || MESSAGE_CAP);
+  }
 
   // ==========================================
   // 1. 独立 IndexedDB 存储层（含 Node.js 内存兜底便于单测）
@@ -185,7 +202,12 @@
           }
         });
         if (rec && typeof rec === "object") {
-          _prefsCache = { ...DEFAULT_PREFS, ...rec, perChatEnabled: { ...(rec.perChatEnabled || {}) } };
+          _prefsCache = {
+            ...DEFAULT_PREFS,
+            ...rec,
+            perChatEnabled: { ...(rec.perChatEnabled || {}) },
+            perChatTriggerMessages: { ...(rec.perChatTriggerMessages || {}) }
+          };
         }
       }
       if (typeof global.dispatchEvent === "function" && typeof CustomEvent === "function") {
@@ -201,7 +223,12 @@
   }
 
   function getPrefs() {
-    return { ...DEFAULT_PREFS, ..._prefsCache, perChatEnabled: { ...(_prefsCache.perChatEnabled || {}) } };
+    return {
+      ...DEFAULT_PREFS,
+      ..._prefsCache,
+      perChatEnabled: { ...(_prefsCache.perChatEnabled || {}) },
+      perChatTriggerMessages: { ...(_prefsCache.perChatTriggerMessages || {}) }
+    };
   }
 
   function savePrefs(patch) {
@@ -209,7 +236,8 @@
     const next = {
       ...cur,
       ...(patch || {}),
-      perChatEnabled: patch && patch.perChatEnabled ? { ...cur.perChatEnabled, ...patch.perChatEnabled } : cur.perChatEnabled
+      perChatEnabled: patch && patch.perChatEnabled ? { ...cur.perChatEnabled, ...patch.perChatEnabled } : cur.perChatEnabled,
+      perChatTriggerMessages: patch && patch.perChatTriggerMessages ? { ...cur.perChatTriggerMessages, ...patch.perChatTriggerMessages } : cur.perChatTriggerMessages
     };
     _prefsCache = next;
     dbPut(STORE_PREFS, { key: PREFS_RECORD_KEY, value: next, updatedAt: Date.now() });
@@ -449,19 +477,20 @@
       .sort((a, b) => a.id - b.id);
 
     const rs = groupRounds(normalized);
-    const rawTokens = normalized.reduce((acc, m) => acc + estimateTokens(m.content), 0);
     const force = Boolean(opts.force);
+    const triggerMsgs = getTriggerMessageCount(charId);
+    const dynamicBatchTokens = Math.max(12000, triggerMsgs * 350);
 
     if (rs.length <= KEEP_ROUNDS) return { compressed: false, reason: "keep_recent_rounds" };
-    if (!force && !(rawTokens > TRIGGER_TOKENS || rs.length > ROUND_CAP || normalized.length > MESSAGE_CAP)) {
-      return { compressed: false, reason: "below_threshold" };
+    if (!force && normalized.length < triggerMsgs) {
+      return { compressed: false, reason: "below_threshold", currentCount: normalized.length, triggerMsgs };
     }
 
     const batch = [];
     let size = 0;
     for (const r of rs.slice(0, rs.length - KEEP_ROUNDS)) {
       const n = r.reduce((acc, m) => acc + estimateTokens(m.content), 0);
-      if (batch.length > 0 && size + n > BATCH_TOKENS) break;
+      if (batch.length > 0 && size + n > dynamicBatchTokens) break;
       batch.push(r);
       size += n;
     }
@@ -1642,12 +1671,19 @@
     const { useState, useEffect } = React;
     const charId = String(chatData.id);
     const [enabled, setEnabled] = useState(() => isEnabledForChat(charId));
+    const [triggerMsgs, setTriggerMsgs] = useState(() => getTriggerMessageCount(charId));
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [guideOpen, setGuideOpen] = useState(false);
 
     useEffect(() => {
-      hydratePrefs().then(() => setEnabled(isEnabledForChat(charId)));
-      const onChange = () => setEnabled(isEnabledForChat(charId));
+      hydratePrefs().then(() => {
+        setEnabled(isEnabledForChat(charId));
+        setTriggerMsgs(getTriggerMessageCount(charId));
+      });
+      const onChange = () => {
+        setEnabled(isEnabledForChat(charId));
+        setTriggerMsgs(getTriggerMessageCount(charId));
+      };
       global.addEventListener("milvus-companion-mem-changed", onChange);
       return () => global.removeEventListener("milvus-companion-mem-changed", onChange);
     }, [charId]);
@@ -1656,6 +1692,13 @@
       const next = !enabled;
       setEnabled(next);
       savePrefs({ perChatEnabled: { [charId]: next } });
+    };
+
+    const updateTriggerMsgs = (val) => {
+      const clamped = clampTriggerMessages(val);
+      setTriggerMsgs(clamped);
+      const curMap = (getPrefs().perChatTriggerMessages || {});
+      savePrefs({ perChatTriggerMessages: { ...curMap, [charId]: clamped } });
     };
 
     return h(
@@ -1722,6 +1765,84 @@
             onChange: toggleChat,
             style: { width: "18px", height: "18px", cursor: "pointer" }
           })
+        ),
+        h(
+          "div",
+          {
+            style: {
+              background: "#F7FAFA",
+              border: "1px solid #E2ECEF",
+              borderRadius: "9px",
+              padding: "8px 10px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px"
+            }
+          },
+          h(
+            "div",
+            { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", fontSize: "11.5px", color: "#364A50" } },
+            h("span", { style: { fontWeight: "700" } }, "胶囊记录频率（每满几条记录一次）"),
+            h(
+              "div",
+              { style: { display: "inline-flex", alignItems: "center", gap: "4px" } },
+              h("input", {
+                type: "number",
+                min: 6,
+                max: 200,
+                step: 1,
+                value: triggerMsgs,
+                onChange: (e) => {
+                  const raw = parseInt(e.target.value, 10);
+                  if (!Number.isNaN(raw)) {
+                    setTriggerMsgs(raw);
+                    if (raw >= 6 && raw <= 200) {
+                      const curMap = (getPrefs().perChatTriggerMessages || {});
+                      savePrefs({ perChatTriggerMessages: { ...curMap, [charId]: raw } });
+                    }
+                  }
+                },
+                onBlur: (e) => updateTriggerMsgs(e.target.value),
+                style: {
+                  width: "54px",
+                  padding: "3px 6px",
+                  borderRadius: "6px",
+                  border: "1px solid #C5D6DB",
+                  background: "#FFFFFF",
+                  fontSize: "12px",
+                  fontWeight: "700",
+                  color: "#2F5866",
+                  textAlign: "center"
+                }
+              }),
+              h("span", { style: { fontSize: "11px", color: "#6F8085" } }, "条")
+            )
+          ),
+          h(
+            "div",
+            { style: { display: "flex", gap: "5px", flexWrap: "wrap" } },
+            [15, 24, 40, 60, 100].map((preset) =>
+              h(
+                "button",
+                {
+                  key: preset,
+                  type: "button",
+                  onClick: () => updateTriggerMsgs(preset),
+                  style: {
+                    padding: "2px 8px",
+                    borderRadius: "999px",
+                    border: triggerMsgs === preset ? "1px solid #2F5866" : "1px solid #D3E0E4",
+                    background: triggerMsgs === preset ? "#2F5866" : "#FFFFFF",
+                    color: triggerMsgs === preset ? "#FFFFFF" : "#566B72",
+                    fontSize: "10.5px",
+                    fontWeight: triggerMsgs === preset ? "700" : "500",
+                    cursor: "pointer"
+                  }
+                },
+                `${preset}条`
+              )
+            )
+          )
         ),
         h(
           "button",
