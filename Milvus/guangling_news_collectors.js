@@ -46,7 +46,10 @@
     xiuyiSurvey: "",
     coupleWish: "",
     coupleDailyQ: "",
-    canghaiMoment: ""
+    canghaiMoment: "",
+    charTrajectory: "",
+    teamBuildingArchive: "",
+    yilutongRoute: ""
   };
 
   function cleanText(raw) {
@@ -567,18 +570,197 @@
     return pickRandomAvoiding(pool, "canghaiMoment", (x) => x.id);
   }
 
-  // ===================== 汇总 5 大新栏目 =====================
+  // ===================== 6. 传讯 · 随机角色行程轨迹（milvus_couple_daily_q_idb -> trajectories） =====================
+  async function collectCharTrajectoryItem(opts) {
+    const options = opts || {};
+    const { map: charNameMap } = await buildCharNameMap(options.mockChars);
+    const rawList = Array.isArray(options.mockTrajectories)
+      ? options.mockTrajectories
+      : await safeReadForeignIDB("milvus_couple_daily_q_idb", "trajectories");
+
+    if (!Array.isArray(rawList) || rawList.length === 0) return null;
+
+    // 去重：优先保留精确日期记录（排除重复的 latest_<charId> 副本）
+    const dedupMap = new Map();
+    rawList.forEach((rec) => {
+      if (!rec || !Array.isArray(rec.events) || rec.events.length === 0) return;
+      const cid = String(rec.charId || "");
+      const dateStr = cleanText(rec.dateStr || "");
+      const key = `${cid}::${dateStr || rec.id}`;
+      const isLatestAlias = String(rec.id || "").startsWith("latest_");
+      if (!dedupMap.has(key) || !isLatestAlias) {
+        dedupMap.set(key, rec);
+      }
+    });
+
+    const pool = [];
+    dedupMap.forEach((rec) => {
+      const charName =
+        charNameMap.get(String(rec.charId)) ||
+        charNameMap.get(Number(rec.charId)) ||
+        cleanText(rec.charName || "") ||
+        "名士";
+      const validEvents = rec.events
+        .filter((ev) => ev && (ev.title || ev.description))
+        .map((ev) => ({
+          time: cleanText(ev.time || ""),
+          title: cleanText(ev.title || ""),
+          description: cleanText(ev.description || "").slice(0, 34),
+          category: cleanText(ev.category || "")
+        }));
+      if (validEvents.length === 0) return;
+      // 精选 2~3 个行程节点播报，保持明快节奏
+      const pickedEvents =
+        validEvents.length <= 3
+          ? validEvents
+          : [validEvents[0], validEvents[Math.floor(validEvents.length / 2)], validEvents[validEvents.length - 1]];
+      pool.push({
+        id: `${rec.charId || charName}::${rec.dateStr || rec.id}`,
+        charName,
+        dateStr: cleanText(rec.dateStr || ""),
+        events: pickedEvents
+      });
+    });
+
+    return pickRandomAvoiding(pool, "charTrajectory", (x) => x.id);
+  }
+
+  // ===================== 7. 游戏 · 团建活动角色档案（真心话回顾 + 赠送礼物） =====================
+  async function collectTeamBuildingArchiveItem(opts) {
+    const options = opts || {};
+    const ls = options.mockStorage || (typeof global.localStorage !== "undefined" ? global.localStorage : null);
+    const { map: charNameMap } = await buildCharNameMap(options.mockChars);
+    const pool = [];
+
+    // 7A. 真心话回顾：t8_teambuilding_character_truth_qa
+    let truthMap = options.mockTruthMap || null;
+    if (!truthMap && ls) {
+      try {
+        truthMap = JSON.parse(ls.getItem("t8_teambuilding_character_truth_qa") || "{}");
+      } catch (_) {}
+    }
+    if (truthMap && typeof truthMap === "object") {
+      Object.keys(truthMap).forEach((cid) => {
+        const list = truthMap[cid];
+        if (!Array.isArray(list)) return;
+        const charName = charNameMap.get(String(cid)) || charNameMap.get(Number(cid)) || "名士";
+        list.forEach((it, idx) => {
+          if (!it) return;
+          const q = cleanText(it.q || it.question || it.title || "");
+          const a = cleanText(it.a || it.answer || it.reply || it.content || "");
+          if (!q && !a) return;
+          pool.push({
+            id: `truth::${cid}::${it.id || idx}::${q.slice(0, 12)}`,
+            kind: "truth",
+            charName,
+            question: q || "团建真心话",
+            answer: a
+          });
+        });
+      });
+    }
+
+    // 7B. 赠送的礼物：t8_teambuilding_character_given_gifts
+    let giftMap = options.mockGiftMap || null;
+    if (!giftMap && ls) {
+      try {
+        giftMap = JSON.parse(ls.getItem("t8_teambuilding_character_given_gifts") || "{}");
+      } catch (_) {}
+    }
+    if (giftMap && typeof giftMap === "object") {
+      Object.keys(giftMap).forEach((cid) => {
+        const list = giftMap[cid];
+        if (!Array.isArray(list)) return;
+        const charName = charNameMap.get(String(cid)) || charNameMap.get(Number(cid)) || "名士";
+        list.forEach((g, idx) => {
+          if (!g) return;
+          const name = cleanText(g.name || g.title || "");
+          const reason = cleanText(g.reason || g.desc || g.description || g.note || "");
+          if (!name) return;
+          pool.push({
+            id: `gift::${cid}::${g.id || idx}::${name}`,
+            kind: "gift",
+            charName,
+            giftName: name,
+            reason
+          });
+        });
+      });
+    }
+
+    return pickRandomAvoiding(pool, "teamBuildingArchive", (x) => x.id);
+  }
+
+  // ===================== 8. 游戏 · 高德驿路通历史路线（地点/工具/耗时/风土人情） =====================
+  async function collectYilutongRouteItem(opts) {
+    const options = opts || {};
+    let history = Array.isArray(options.mockRoutes) ? options.mockRoutes : [];
+
+    if (history.length === 0 && global.yilutongStore && typeof global.yilutongStore.get === "function") {
+      try {
+        const saved = await global.yilutongStore.get("yilutong_route_history");
+        if (Array.isArray(saved)) history = saved;
+      } catch (_) {}
+    }
+    if (!Array.isArray(history) || history.length === 0) return null;
+
+    const pool = [];
+    history.forEach((hItem) => {
+      if (!hItem) return;
+      const sp = hItem.startPoint || {};
+      const ep = hItem.endPoint || {};
+      const startName = cleanText([sp.region, sp.county].filter(Boolean).join("·") || sp.name || "");
+      const endName = cleanText([ep.region, ep.county].filter(Boolean).join("·") || ep.name || "");
+      if (!startName && !endName) return;
+      const rd = hItem.routeData || {};
+      pool.push({
+        id: String(hItem.id || `${startName}->${endName}`),
+        startName: startName || "广陵",
+        endName: endName || "远方",
+        transport: cleanText(hItem.transport || "驿马"),
+        days: cleanText(rd.days || "数日"),
+        feasible: cleanText(rd.feasible || ""),
+        customs: cleanText(rd.customs || ""),
+        situations: cleanText(rd.situations || "")
+      });
+    });
+
+    return pickRandomAvoiding(pool, "yilutongRoute", (x) => x.id);
+  }
+
+  // ===================== 汇总 8 大拓展联动栏目 =====================
   async function collectAllExtra(sources, opts) {
     const src = sources || {};
     const options = opts || {};
-    const [moments, xiuyiSurvey, coupleWish, coupleDailyQ, canghaiMoment] = await Promise.all([
+    const [
+      moments,
+      xiuyiSurvey,
+      coupleWish,
+      coupleDailyQ,
+      canghaiMoment,
+      charTrajectory,
+      teamBuildingArchive,
+      yilutongRoute
+    ] = await Promise.all([
       src.moments ? collectMomentsItem(options) : Promise.resolve(null),
       src.xiuyiSurvey ? collectXiuYiSurveyItem(options) : Promise.resolve(null),
       src.coupleWish ? collectCoupleWishItem(options) : Promise.resolve(null),
       src.coupleDailyQ ? collectCoupleDailyQItem(options) : Promise.resolve(null),
-      src.canghaiMoment ? collectCanghaiMomentItem(options) : Promise.resolve(null)
+      src.canghaiMoment ? collectCanghaiMomentItem(options) : Promise.resolve(null),
+      src.charTrajectory ? collectCharTrajectoryItem(options) : Promise.resolve(null),
+      src.teamBuildingArchive ? collectTeamBuildingArchiveItem(options) : Promise.resolve(null),
+      src.yilutongRoute ? collectYilutongRouteItem(options) : Promise.resolve(null)
     ]);
-    return { moments, xiuyiSurvey, coupleWish, coupleDailyQ, canghaiMoment };
+    return {
+      moments,
+      xiuyiSurvey,
+      coupleWish,
+      coupleDailyQ,
+      canghaiMoment,
+      charTrajectory,
+      teamBuildingArchive,
+      yilutongRoute
+    };
   }
 
   // 将 5 大新栏目素材转为《朋友收集》风格的分屏台词段
@@ -669,6 +851,53 @@
       }
     }
 
+    // 6. 传讯 · 角色行程轨迹
+    if (src.charTrajectory && d.charTrajectory && Array.isArray(d.charTrajectory.events) && d.charTrajectory.events.length > 0) {
+      const tr = d.charTrajectory;
+      const lines = [];
+      const datePrefix = tr.dateStr ? `${tr.dateStr} ` : "近期";
+      lines.push(`【广陵行踪速递】本台收到${tr.charName}${datePrefix}的行程轨迹简报：`);
+      tr.events.forEach((ev) => {
+        const slot = ev.time ? `${ev.time}` : "某时";
+        const descPart = ev.description ? `——${ev.description}` : "";
+        lines.push(`${slot}「${ev.title || "日常行程"}」${descPart}`);
+      });
+      entries.push({ id: "charTrajectory", headline: `行踪速递：${tr.charName}行程轨迹`, lines });
+    }
+
+    // 7. 游戏 · 团建档案（真心话回顾 / 赠送礼物）
+    if (src.teamBuildingArchive && d.teamBuildingArchive) {
+      const tb = d.teamBuildingArchive;
+      const lines = [];
+      if (tb.kind === "gift") {
+        lines.push(`【团建密档 · 赠礼回顾】翻开${tb.charName}的团建角色档案，曾为你特意备下好礼「${tb.giftName}」！`);
+        if (tb.reason) {
+          split(`附带赠礼心意：「${tb.reason}」`, 54).slice(0, 2).forEach((c) => lines.push(c));
+        }
+        entries.push({ id: "teamBuildingArchive", headline: `团建赠礼：${tb.charName}的「${tb.giftName}」`, lines });
+      } else {
+        lines.push(`【团建密档 · 真心话回顾】在${tb.charName}的团建档案中，曾被追问：「${tb.question}」`);
+        if (tb.answer) {
+          split(`${tb.charName}当时如实答道：「${tb.answer}」`, 54).slice(0, 2).forEach((c) => lines.push(c));
+        }
+        entries.push({ id: "teamBuildingArchive", headline: `团建真心话：${tb.charName}密档`, lines });
+      }
+    }
+
+    // 8. 游戏 · 高德驿路通历史路线
+    if (src.yilutongRoute && d.yilutongRoute) {
+      const rt = d.yilutongRoute;
+      const lines = [];
+      const feasPart = rt.feasible ? `（路况评级：${rt.feasible}）` : "";
+      lines.push(`【东汉驿路通 · 交通与风物】历史路线回顾：自「${rt.startName}」前往「${rt.endName}」，选用【${rt.transport}】，预计耗时${rt.days}${feasPart}。`);
+      if (rt.customs) {
+        split(`沿途风土人情与特产：${rt.customs}`, 54).slice(0, 2).forEach((c) => lines.push(c));
+      } else if (rt.situations) {
+        split(`沿途路况提醒：${rt.situations}`, 54).slice(0, 1).forEach((c) => lines.push(c));
+      }
+      entries.push({ id: "yilutongRoute", headline: `驿路风物：${rt.startName}至${rt.endName}`, lines });
+    }
+
     return entries;
   }
 
@@ -683,6 +912,9 @@
     collectCoupleWishItem,
     collectCoupleDailyQItem,
     collectCanghaiMomentItem,
+    collectCharTrajectoryItem,
+    collectTeamBuildingArchiveItem,
+    collectYilutongRouteItem,
     collectAllExtra,
     composeExtraSectionEntries
   };

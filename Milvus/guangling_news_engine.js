@@ -21,10 +21,13 @@
     tabloid: true, // 论坛 · 名人小报（随机挑 1 条详细播报）
     superTopic: true, // 论坛 · 超话圈（随机挑 1 条播报）
     chatRecent: true, // 传讯 · 随机角色近 3-5 条播报
+    charTrajectory: true, // 传讯 · 随机角色行程轨迹
     moments: true, // 传讯 · 角色朋友圈
     xiuyilouNotice: true, // 绣衣楼 · 公告随机播报
     xiuyiSurvey: true, // 绣衣楼 · 绣衣问卷
     taijichiGoods: true, // 太疾驰 · 随机商品播报
+    yilutongRoute: true, // 游戏 · 高德驿路通历史路线与风土人情
+    teamBuildingArchive: true, // 游戏 · 团建档案（真心话/赠礼）
     coupleWish: true, // 情侣空间 · 角色愿望
     coupleDailyQ: true, // 情侣空间 · 每日一问
     canghaiMoment: true, // 情侣空间 · 沧海一刻
@@ -37,9 +40,12 @@
     { id: "xiuyilouNotice", group: "public", label: "绣衣楼 · 公告", desc: "随机挑选一条绣衣楼四大板块公告宣读" },
     { id: "xiuyiSurvey", group: "public", label: "绣衣楼 · 绣衣问卷", desc: "随机播报已保存的官方或自拟问卷答卷" },
     { id: "taijichiGoods", group: "public", label: "太疾驰 · 随机商品", desc: "随机挑选太疾驰上架商品做物价好物快讯" },
+    { id: "yilutongRoute", group: "public", label: "游戏 · 驿路通路线", desc: "播报历史路线地点、交通工具、耗时与风土人情" },
     { id: "funNews", group: "public", label: "广陵街头趣闻", desc: "穿插轻松诙谐的广陵城日常彩蛋" },
     { id: "chatRecent", group: "private", label: "传讯 · 角色近况", desc: "随机抽选一位角色的近 3-5 条聊天播报" },
+    { id: "charTrajectory", group: "private", label: "传讯 · 行程轨迹", desc: "播报随机角色近期行程轨迹与时辰动向" },
     { id: "moments", group: "private", label: "传讯 · 角色朋友圈", desc: "随机播报一条角色朋友圈动态与神评" },
+    { id: "teamBuildingArchive", group: "private", label: "游戏 · 团建档案", desc: "回顾角色真心话招供与赠送的好礼心意" },
     { id: "coupleWish", group: "private", label: "情侣空间 · 角色愿望", desc: "随机播报角色悄悄写下的愿望清单" },
     { id: "coupleDailyQ", group: "private", label: "情侣空间 · 每日一问", desc: "随机重温一道已作答的每日默契问答" },
     { id: "canghaiMoment", group: "private", label: "情侣空间 · 沧海一刻", desc: "播报角色近期心情贴纸与手札片段" }
@@ -669,34 +675,79 @@
     return pickRandomAvoiding(pool, "tabloid", (x) => `${x.charName}::${x.title}`);
   }
 
-  // 2. 论坛 · 超话圈（随机挑 1 条）
-  function collectSuperTopicItem(storageObj) {
+  // 2. 论坛 · 超话圈（优先读 IndexedDB window.mansionStore 全角色三风向新帖 + 合并 localStorage 兜底）
+  async function collectSuperTopicItem(storageObj) {
     const ls = storageObj || (typeof global.localStorage !== "undefined" ? global.localStorage : null);
-    if (!ls) return null;
     const pool = [];
+    const seen = new Set();
 
-    try {
-      for (let i = 0; i < ls.length; i++) {
-        const k = ls.key(i);
-        if (!k || !k.startsWith("weibo_circle_")) continue;
-        const arr = JSON.parse(ls.getItem(k) || "[]");
-        if (!Array.isArray(arr)) continue;
-        arr.forEach((it) => {
-          if (!it) return;
-          const content = cleanPlainText(it.content || it.text || it.title || "");
-          if (content.length < 4) return;
-          const authorRaw =
-            typeof it.author === "object" && it.author
-              ? it.author.name || it.author.nickname || it.author.userName || ""
-              : it.author || it.userName || it.nickname || "";
-          pool.push({
-            circleName: it.circleCharName ? `#${it.circleCharName}超话#` : "超话圈",
-            author: cleanPlainText(authorRaw) || "匿名网友",
-            content
-          });
-        });
-      }
-    } catch (_) {}
+    const pushPost = (it, fallbackCharName) => {
+      if (!it) return;
+      const title = cleanPlainText(it.title || "");
+      const body = cleanPlainText(it.content || it.text || "");
+      const content = title && body && !body.includes(title) ? `《${title}》${body}` : (body || title);
+      if (content.length < 4) return;
+      const cName = cleanPlainText(it.circleCharName || fallbackCharName || "");
+      const circleName = cName ? `#${cName}超话#` : "超话圈";
+      const authorRaw =
+        typeof it.author === "object" && it.author
+          ? it.author.name || it.author.nickname || it.author.userName || ""
+          : it.author || it.userName || it.nickname || "";
+      const dedupKey = `${circleName}::${it.id || content.slice(0, 28)}`;
+      if (seen.has(dedupKey)) return;
+      seen.add(dedupKey);
+      pool.push({
+        circleName,
+        author: cleanPlainText(authorRaw) || "匿名网友",
+        content
+      });
+    };
+
+    // 2A. 真实最新超话帖：IndexedDB window.mansionStore -> weibo_circle_<charKey>_<praise|real|meme>
+    if (global.mansionStore && typeof global.mansionStore.get === "function") {
+      try {
+        let chars = [];
+        if (global.chatCharacterStore && typeof global.chatCharacterStore.getAll === "function") {
+          const all = await global.chatCharacterStore.getAll();
+          if (Array.isArray(all)) {
+            chars = all.filter((c) => {
+              if (!c || !c.name) return false;
+              const idStr = String(c.id || "");
+              return !(c.isGroup || c.type === "group" || c.type === "decor" || c.type === "moments" || idStr === "moments_data" || idStr.startsWith("group") || idStr.startsWith("style_"));
+            });
+          }
+        }
+        const modes = ["praise", "real", "meme"];
+        await Promise.all(
+          chars.flatMap((c) => {
+            const ck = String(c.id || c.name || "").replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, "_");
+            return modes.map((m) =>
+              global.mansionStore
+                .get(`weibo_circle_${ck}_${m}`)
+                .then((arr) => {
+                  if (Array.isArray(arr)) {
+                    arr.forEach((it) => pushPost(it, c.name));
+                  }
+                })
+                .catch(() => {})
+            );
+          })
+        );
+      } catch (_) {}
+    }
+
+    // 2B. 兼容旧版或镜像 localStorage["weibo_circle_*"]
+    if (ls) {
+      try {
+        for (let i = 0; i < ls.length; i++) {
+          const k = ls.key(i);
+          if (!k || !k.startsWith("weibo_circle_")) continue;
+          const arr = JSON.parse(ls.getItem(k) || "[]");
+          if (!Array.isArray(arr)) continue;
+          arr.forEach((it) => pushPost(it, ""));
+        }
+      } catch (_) {}
+    }
 
     return pickRandomAvoiding(pool, "superTopic", (x) => `${x.circleName}::${x.content.slice(0, 24)}`);
   }
@@ -888,7 +939,8 @@
         ? global.GuanglingNewsCollectors.collectAllExtra(sources, opts)
         : Promise.resolve({});
 
-    const [chatRecent, xiuyilouNotice, taijichiGoods, extraDigest] = await Promise.all([
+    const [superTopic, chatRecent, xiuyilouNotice, taijichiGoods, extraDigest] = await Promise.all([
+      sources.superTopic ? collectSuperTopicItem(opts.mockStorage) : Promise.resolve(null),
       sources.chatRecent ? collectRandomChatRecent(opts.mockChars, opts.mockGetMessages) : Promise.resolve(null),
       sources.xiuyilouNotice ? collectXiuYiLouNotice(opts.mockNotices) : Promise.resolve(null),
       sources.taijichiGoods ? collectTaiJiChiGoods(opts.mockGoods) : Promise.resolve([]),
@@ -896,7 +948,6 @@
     ]);
 
     const tabloid = sources.tabloid ? collectTabloidItem(opts.mockStorage) : null;
-    const superTopic = sources.superTopic ? collectSuperTopicItem(opts.mockStorage) : null;
 
     let solarTerm = null;
     if (global.SeasonalPushEngine) {

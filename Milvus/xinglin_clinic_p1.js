@@ -1031,9 +1031,46 @@ ${c.note ? `用户转发附言：“${c.note}”\n` : ""}（提示：${guidance}
     }
   }
 
-  function saveDailyRecords(arr) {
+  async function loadDailyRecordsAsync() {
+    const lsRecords = loadDailyRecords();
+    let idbRecords = [];
     try {
-      localStorage.setItem(DAILY_RECORDS_KEY, JSON.stringify((arr || []).slice(0, 50)));
+      if (global.dbManager && typeof global.dbManager.get === "function") {
+        const raw = await global.dbManager.get(DAILY_RECORDS_KEY);
+        if (Array.isArray(raw)) {
+          idbRecords = raw;
+        } else if (typeof raw === "string" && raw.trim()) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) idbRecords = parsed;
+        }
+      }
+    } catch (e) {
+      console.warn("[Xinglin] 读取 IndexedDB 历史病历失败:", e);
+    }
+    const mergedMap = new Map();
+    [...idbRecords, ...lsRecords].forEach((rec) => {
+      if (rec && rec.id && !mergedMap.has(rec.id)) mergedMap.set(rec.id, rec);
+    });
+    const merged = Array.from(mergedMap.values())
+      .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+      .slice(0, 100);
+    if (merged.length > idbRecords.length && global.dbManager && typeof global.dbManager.set === "function") {
+      try {
+        await global.dbManager.set(DAILY_RECORDS_KEY, JSON.stringify(merged));
+      } catch (e) {}
+    }
+    return merged;
+  }
+
+  function saveDailyRecords(arr) {
+    const sliced = (Array.isArray(arr) ? arr : []).slice(0, 100);
+    try {
+      if (global.dbManager && typeof global.dbManager.set === "function") {
+        global.dbManager.set(DAILY_RECORDS_KEY, JSON.stringify(sliced)).catch(() => {});
+      }
+    } catch (e) {}
+    try {
+      localStorage.setItem(DAILY_RECORDS_KEY, JSON.stringify(sliced.slice(0, 30)));
     } catch (e) {}
   }
 
@@ -1053,7 +1090,10 @@ ${c.note ? `用户转发附言：“${c.note}”\n` : ""}（提示：${guidance}
     const [generating, setGenerating] = useState(false);
     const [errorTip, setErrorTip] = useState("");
     const [records, setRecords] = useState(() => loadDailyRecords());
+    const [dailySubTab, setDailySubTab] = useState("generate"); // "generate" | "archive"
     const [filterChar, setFilterChar] = useState("all");
+    const [filterDoc, setFilterDoc] = useState("all");
+    const [archiveSearch, setArchiveSearch] = useState("");
     const [showDocGallery, setShowDocGallery] = useState(false);
     const [galleryDoc, setGalleryDoc] = useState(docNames[0] || "董奉");
 
@@ -1064,11 +1104,18 @@ ${c.note ? `用户转发附言：“${c.note}”\n` : ""}（提示：${guidance}
     const [toastMsg, setToastMsg] = useState("");
 
     useEffect(() => {
+      let alive = true;
+      loadDailyRecordsAsync().then((loaded) => {
+        if (alive && Array.isArray(loaded)) {
+          setRecords(loaded);
+        }
+      });
       if (global.XinglinClinicEngine && typeof global.XinglinClinicEngine.refreshChatCharacters === "function") {
         global.XinglinClinicEngine.refreshChatCharacters().then((list) => {
-          if (Array.isArray(list)) setChatChars(list);
+          if (alive && Array.isArray(list)) setChatChars(list);
         });
       }
+      return () => { alive = false; };
     }, []);
 
     useEffect(() => {
@@ -1236,11 +1283,46 @@ ${topicHint.trim() ? `【用户补充的今日看病契机】：${topicHint.trim
       const next = records.filter((r) => r.id !== id);
       setRecords(next);
       saveDailyRecords(next);
+      showToast("已删除该条病历存档");
     };
 
-    const visibleRecords = filterChar === "all"
-      ? records
-      : records.filter((r) => String(r.charId) === String(filterChar) || r.charName === filterChar);
+    const handleClearArchive = () => {
+      if (records.length === 0) return;
+      if (typeof window !== "undefined" && window.confirm && !window.confirm(`确定清空全部 ${records.length} 条名士病历历史存档吗？`)) {
+        return;
+      }
+      setRecords([]);
+      saveDailyRecords([]);
+      setFilterChar("all");
+      setFilterDoc("all");
+      setArchiveSearch("");
+      showToast("已清空全部历史病历存档");
+    };
+
+    const visibleRecords = records.filter((r) => {
+      if (filterChar !== "all" && String(r.charId) !== String(filterChar) && r.charName !== filterChar) {
+        return false;
+      }
+      if (filterDoc !== "all" && r.doctorName !== filterDoc) {
+        return false;
+      }
+      if (archiveSearch.trim()) {
+        const kw = archiveSearch.trim().toLowerCase();
+        const hay = [
+          r.charName,
+          r.doctorName,
+          r.tag,
+          r.date,
+          r.diagnosis?.chiefComplaint,
+          r.diagnosis?.syndrome,
+          r.prescription?.name
+        ].filter(Boolean).join(" ").toLowerCase();
+        if (!hay.includes(kw)) return false;
+      }
+      return true;
+    });
+
+    const displayedRecords = dailySubTab === "archive" ? visibleRecords : records.slice(0, 1);
 
     const activeGalleryDoc = docs[galleryDoc] || docs["董奉"];
 
@@ -1281,8 +1363,60 @@ ${topicHint.trim() ? `【用户补充的今日看病契机】：${topicHint.trim
           toastMsg
         ),
 
-      // 1. 生成控制台
+      // 0. 子页签切换：开药日常 / 历史病历存档
       React.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            gap: "6px",
+            background: "#ece6d6",
+            padding: "4px",
+            borderRadius: "12px"
+          }
+        },
+        React.createElement(
+          "button",
+          {
+            onClick: () => setDailySubTab("generate"),
+            style: {
+              flex: 1,
+              padding: "8px 10px",
+              borderRadius: "9px",
+              border: "none",
+              background: dailySubTab === "generate" ? "#fff" : "transparent",
+              color: dailySubTab === "generate" ? "#3b5d47" : "#6c7160",
+              fontSize: "12px",
+              fontWeight: dailySubTab === "generate" ? "800" : "600",
+              boxShadow: dailySubTab === "generate" ? "0 2px 6px rgba(60,55,40,0.08)" : "none",
+              cursor: "pointer"
+            }
+          },
+          "✨ 今日开药日常"
+        ),
+        React.createElement(
+          "button",
+          {
+            onClick: () => setDailySubTab("archive"),
+            style: {
+              flex: 1,
+              padding: "8px 10px",
+              borderRadius: "9px",
+              border: "none",
+              background: dailySubTab === "archive" ? "#fff" : "transparent",
+              color: dailySubTab === "archive" ? "#7d4c0e" : "#6c7160",
+              fontSize: "12px",
+              fontWeight: dailySubTab === "archive" ? "800" : "600",
+              boxShadow: dailySubTab === "archive" ? "0 2px 6px rgba(60,55,40,0.08)" : "none",
+              cursor: "pointer"
+            }
+          },
+          `📜 历史病历存档 (${records.length})`
+        )
+      ),
+
+      // 1. 生成控制台（仅在「今日开药日常」显示）
+      dailySubTab === "generate" && React.createElement(
         "div",
         {
           style: {
@@ -1509,52 +1643,170 @@ ${topicHint.trim() ? `【用户补充的今日看病契机】：${topicHint.trim
         )
       ),
 
-      // 2. 历史医案筛选与归档流
-      records.length > 0 &&
+      // 2. 历史病历存档筛选与管理栏
+      dailySubTab === "archive" &&
         React.createElement(
           "div",
-          { style: { display: "flex", alignItems: "center", gap: "6px", overflowX: "auto" } },
-          React.createElement("span", { style: { fontSize: "11px", color: "#7d8270", flexShrink: 0 } }, `医案馆 (${records.length})：`),
+          {
+            style: {
+              background: "#fff",
+              borderRadius: "14px",
+              padding: "12px",
+              border: "1px solid #e7e0ce",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px"
+            }
+          },
+          React.createElement(
+            "div",
+            { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
+            React.createElement("strong", { style: { fontSize: "13px", color: "#3d4637" } }, `📜 名士医案档案馆（共 ${records.length} 卷）`),
+            records.length > 0 &&
+              React.createElement(
+                "button",
+                {
+                  onClick: handleClearArchive,
+                  style: {
+                    border: "1px solid #e6d8d4",
+                    background: "#fdf5f3",
+                    color: "#b44a3a",
+                    borderRadius: "999px",
+                    padding: "3px 9px",
+                    fontSize: "11px",
+                    cursor: "pointer"
+                  }
+                },
+                "清空存档"
+              )
+          ),
+          React.createElement("input", {
+            value: archiveSearch,
+            onChange: (e) => setArchiveSearch(e.target.value),
+            placeholder: "搜索名士、大夫、病证或药方名…",
+            style: {
+              width: "100%",
+              boxSizing: "border-box",
+              padding: "7px 10px",
+              borderRadius: "9px",
+              border: "1px solid #e2d9c6",
+              background: "#fcfaf5",
+              fontSize: "12px",
+              outline: "none"
+            }
+          }),
+          records.length > 0 &&
+            React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "6px", overflowX: "auto" } },
+              React.createElement("span", { style: { fontSize: "11px", color: "#7d8270", flexShrink: 0 } }, "名士："),
+              React.createElement(
+                "button",
+                {
+                  onClick: () => setFilterChar("all"),
+                  style: {
+                    flexShrink: 0,
+                    padding: "3px 9px",
+                    borderRadius: "999px",
+                    border: "none",
+                    background: filterChar === "all" ? "#6d947c" : "#e9e3d3",
+                    color: filterChar === "all" ? "#fff" : "#636858",
+                    fontSize: "11px",
+                    cursor: "pointer"
+                  }
+                },
+                "全部"
+              ),
+              Array.from(new Set(records.map((r) => r.charName))).map((cn) =>
+                React.createElement(
+                  "button",
+                  {
+                    key: cn,
+                    onClick: () => setFilterChar(cn),
+                    style: {
+                      flexShrink: 0,
+                      padding: "3px 9px",
+                      borderRadius: "999px",
+                      border: "none",
+                      background: filterChar === cn ? "#6d947c" : "#e9e3d3",
+                      color: filterChar === cn ? "#fff" : "#636858",
+                      fontSize: "11px",
+                      cursor: "pointer"
+                    }
+                  },
+                  cn
+                )
+              )
+            ),
+          records.length > 0 &&
+            React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "6px", overflowX: "auto" } },
+              React.createElement("span", { style: { fontSize: "11px", color: "#7d8270", flexShrink: 0 } }, "大夫："),
+              React.createElement(
+                "button",
+                {
+                  onClick: () => setFilterDoc("all"),
+                  style: {
+                    flexShrink: 0,
+                    padding: "3px 9px",
+                    borderRadius: "999px",
+                    border: "none",
+                    background: filterDoc === "all" ? "#b67e3d" : "#e9e3d3",
+                    color: filterDoc === "all" ? "#fff" : "#636858",
+                    fontSize: "11px",
+                    cursor: "pointer"
+                  }
+                },
+                "全部"
+              ),
+              Array.from(new Set(records.map((r) => r.doctorName).filter(Boolean))).map((dn) =>
+                React.createElement(
+                  "button",
+                  {
+                    key: dn,
+                    onClick: () => setFilterDoc(dn),
+                    style: {
+                      flexShrink: 0,
+                      padding: "3px 9px",
+                      borderRadius: "999px",
+                      border: "none",
+                      background: filterDoc === dn ? "#b67e3d" : "#e9e3d3",
+                      color: filterDoc === dn ? "#fff" : "#636858",
+                      fontSize: "11px",
+                      cursor: "pointer"
+                    }
+                  },
+                  dn
+                )
+              )
+            )
+        ),
+
+      // 在「今日开药日常」模式下，若已有存档则展示“最新一卷”提示栏并可一键跳转档案馆
+      dailySubTab === "generate" && records.length > 0 &&
+        React.createElement(
+          "div",
+          { style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 2px" } },
+          React.createElement("span", { style: { fontSize: "12px", fontWeight: "700", color: "#5a5f4d" } }, "🩺 最新病历"),
           React.createElement(
             "button",
             {
-              onClick: () => setFilterChar("all"),
+              onClick: () => setDailySubTab("archive"),
               style: {
-                flexShrink: 0,
-                padding: "3px 9px",
-                borderRadius: "999px",
                 border: "none",
-                background: filterChar === "all" ? "#6d947c" : "#e9e3d3",
-                color: filterChar === "all" ? "#fff" : "#636858",
-                fontSize: "11px",
+                background: "transparent",
+                color: "#7d4c0e",
+                fontSize: "12px",
+                fontWeight: "700",
                 cursor: "pointer"
               }
             },
-            "全部"
-          ),
-          Array.from(new Set(records.map((r) => r.charName))).map((cn) =>
-            React.createElement(
-              "button",
-              {
-                key: cn,
-                onClick: () => setFilterChar(cn),
-                style: {
-                  flexShrink: 0,
-                  padding: "3px 9px",
-                  borderRadius: "999px",
-                  border: "none",
-                  background: filterChar === cn ? "#6d947c" : "#e9e3d3",
-                  color: filterChar === cn ? "#fff" : "#636858",
-                  fontSize: "11px",
-                  cursor: "pointer"
-                }
-              },
-              cn
-            )
+            `查看全部 ${records.length} 卷历史存档 →`
           )
         ),
 
-      visibleRecords.length === 0
+      displayedRecords.length === 0
         ? React.createElement(
             "div",
             {
@@ -1569,9 +1821,13 @@ ${topicHint.trim() ? `【用户补充的今日看病契机】：${topicHint.trim
                 lineHeight: 1.6
               }
             },
-            "尚无名士开药日常记录。选一位传讯名士和坐诊大夫，点击上方按钮即可记录今日诊室趣闻！"
+            dailySubTab === "archive"
+              ? (records.length > 0
+                  ? "未找到符合筛选条件的病历存档，试试清空搜索词或切换名士/大夫。"
+                  : "医案档案馆暂空。回到「今日开药日常」生成医案后，将自动永久归档至此处。")
+              : "尚无名士开药日常记录。选一位传讯名士和坐诊大夫，点击上方按钮即可记录今日诊室趣闻！"
           )
-        : visibleRecords.map((rec) =>
+        : displayedRecords.map((rec) =>
             React.createElement(
               "div",
               {
